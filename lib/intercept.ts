@@ -8,7 +8,12 @@ import {
 
 const keys = ['adBreakHeartbeatParams', 'adPlacements', 'adSlots', 'playerAds']
 
-export const RE_INTERCEPT = new RegExp('^/youtubei/v1/(browse|get_watch|next|player|search)')
+/* Anchored at the end on purpose: /youtubei/v1/player/heartbeat is not the
+ * player response, it is how the page tells YouTube the video is still being
+ * watched and how far in. Rebuilding that through the player transform put the
+ * progress other devices resume from through a parser meant for something
+ * else. */
+export const RE_INTERCEPT = new RegExp('^/youtubei/v1/(browse|get_watch|next|player|search)$')
 
 interface TransformOptions {
   hideShorts?: boolean

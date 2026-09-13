@@ -182,12 +182,33 @@ export function closePlayer() {
   ui$.playerUrl.set('')
   ui$.playerPageUrl.set('')
   // Through the retrying load: emptying it is what stops the audio, so it has
-  // to survive a webview that has not come up yet just as a video does.
+  // to survive a webview that has not come up yet just as a video does. The
+  // page is given a moment first to report where the video was left.
   if (playerWebview) {
-    loadPlayerUrl(playerWebview, 'about:blank', playerLoadToken)
+    const webview = playerWebview
+    const token = playerLoadToken
+    flushWatchProgress(webview)
+    setTimeout(() => loadPlayerUrl(webview, 'about:blank', token), FLUSH_MS)
   }
   syncForegroundWebview()
 }
+
+/* Leaving a video behind: let YouTube post the last of the watch time before
+ * the page is gone. It sends one when playback pauses and flushes what is left
+ * on pagehide, so without this the position other devices pick the video up
+ * from is the one from the last ping rather than where it was actually left --
+ * and closing the player empties the webview immediately. */
+function flushWatchProgress(webview: any) {
+  try {
+    void webview
+      ?.executeJavaScript?.("window.NouTube?.pause?.();window.dispatchEvent(new Event('pagehide'))")
+      ?.catch?.(() => undefined)
+  } catch {}
+}
+
+// Long enough for the ping to leave, short enough not to be heard as the video
+// carrying on after it was closed.
+const FLUSH_MS = 400
 
 export function pausePlayer() {
   try {
@@ -236,6 +257,13 @@ function loadIntoPlayer(url: string) {
         return
       }
     } catch {}
+  }
+  // A fresh document takes the page with it, and the video it was playing has
+  // its own watch time to report.
+  if (isWatchUrl(ui$.playerPageUrl.peek())) {
+    flushWatchProgress(webview)
+    setTimeout(() => loadPlayerUrl(webview, url, token), FLUSH_MS)
+    return
   }
   loadPlayerUrl(webview, url, token)
 }
