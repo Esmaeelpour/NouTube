@@ -130,6 +130,16 @@ class NouWebView @JvmOverloads constructor(context: Context, attrs: AttributeSet
     super.onWindowVisibilityChanged(VISIBLE)
   }
 
+  // The screen going off suspends the renderer the same way the window going
+  // away does, which stops background audio dead a few seconds in and starts it
+  // again the moment the screen lights up -- lock screen included. It freezes
+  // the page's timers along with it, so the background guard cannot even see
+  // this one, let alone resume from it. Report the screen as on, exactly as the
+  // window is reported as visible above.
+  override fun onScreenStateChanged(screenState: Int) {
+    super.onScreenStateChanged(SCREEN_STATE_ON)
+  }
+
   init {
     settings.run {
       javaScriptEnabled = true
