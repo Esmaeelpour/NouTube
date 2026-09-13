@@ -48,9 +48,13 @@ const cssContentMobile = css`
     pointer-events: none;
   }
 
-  #player-control-overlay .ytPlayerProgressBarHost {
-    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
-  }
+  /*
+   * No filter here. The played part of the bar animates continuously, and a
+   * filter on its host takes the whole subtree off the compositor and
+   * re-rasterizes it every frame: the red then trails the scrubber and its
+   * leading edge smears into the shadow. The darkened scrim above already
+   * gives the bar the contrast this was for.
+   */
 
   /*
    * YouTube Music mobile: when minimized to the bottom player bar,
