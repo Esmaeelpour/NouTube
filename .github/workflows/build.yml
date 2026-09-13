@@ -47,11 +47,12 @@ jobs:
           bun bundle:es
           bun expo prebuild -p android --clean --no-install
 
-      # Only the ABIs a phone actually runs: x86 and x86_64 are emulator
-      # images, and each one is a full native build and a full APK. The build
-      # cache and the workers keep the rest of it off the clock.
+      # One ABI: arm64-v8a is every phone this is installed on. x86 and
+      # x86_64 are emulator images, and armeabi-v7a is 32-bit hardware -- each
+      # one is a full native build and a full APK for nobody. Add them back to
+      # this flag if that ever changes.
       - name: build apk
-        run: ./gradlew assembleFullRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --build-cache --parallel
+        run: ./gradlew assembleFullRelease -PreactNativeArchitectures=arm64-v8a --build-cache --parallel
         working-directory: android
 
       # https://github.com/r0adkll/sign-android-release/issues/84#issuecomment-1889636075

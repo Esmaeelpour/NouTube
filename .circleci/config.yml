@@ -101,10 +101,10 @@ jobs:
           keys:
             - gradle-v1-{{ checksum "android/gradle/wrapper/gradle-wrapper.properties" }}
             - gradle-v1-
-      # Only the ABIs a phone actually runs, matching the GitHub workflow.
+      # One ABI, matching the GitHub workflow.
       - run:
           name: build apk
-          command: ./gradlew assembleFullRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a --build-cache --parallel
+          command: ./gradlew assembleFullRelease -PreactNativeArchitectures=arm64-v8a --build-cache --parallel
           working_directory: ~/noutube/android
       - save_cache:
           key: gradle-v1-{{ checksum "android/gradle/wrapper/gradle-wrapper.properties" }}
