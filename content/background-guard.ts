@@ -19,11 +19,24 @@ const PAUSED = 2
 const BUFFERING = 3
 
 // Attempts that are plain playVideo() calls before the seek nudge is brought
-// in, and the point at which the guard stops fighting altogether.
+// in, and the point after which the guard stops pressing and only checks back
+// now and then.
 const NUDGE_AFTER_ATTEMPTS = 2
 const MAX_RESUME_ATTEMPTS = 5
 // Ticks (5s each) a clock may stand still before playback counts as stalled.
 const STALL_TICKS = 3
+// Every resume is heard: playback stops and starts again, and a nudge repeats
+// the last few seconds. Leave room between attempts so a guard that is losing
+// is a couple of blips rather than a stutter -- and once it has clearly lost,
+// back off to the occasional look rather than either stuttering on or giving
+// up on the video for good.
+const ATTEMPT_COOLDOWN_TICKS = 6
+const SLOW_RETRY_TICKS = 24
+// Playback that came back and stayed back has recovered, and the next trouble
+// deserves the full allowance again. Recovering for one tick before stopping
+// again has not: that is the guard and YouTube taking turns, and counting it
+// as recovery is what let them do it forever.
+const HEALTHY_TICKS_TO_RESET = 12
 
 const bridgeToken = () => window.NouTubeToken || ''
 
@@ -33,9 +46,18 @@ let pausedByInterruption = false
 let pausedTicks = 0
 let resumeAttempts = 0
 let stalledTicks = 0
+let lastVideoTime = -1
+let healthyTicks = 0
+let ticksSinceAttempt = ATTEMPT_COOLDOWN_TICKS
 let lastTime = -1
 
 const isBackground = () => window.NouTubeBackground === true
+
+/* Whether another resume may be heard yet. The first few come reasonably
+ * quickly, because most background pauses give way to one; after that the
+ * guard is losing an argument and pressing harder only makes the noise. */
+const canAttempt = () =>
+  ticksSinceAttempt >= (resumeAttempts >= MAX_RESUME_ATTEMPTS ? SLOW_RETRY_TICKS : ATTEMPT_COOLDOWN_TICKS)
 
 function confirmYouThereDialogs() {
   // "Continue watching?" prompts. Only click when the dialog has exactly one
@@ -59,6 +81,15 @@ function confirmYouThereDialogs() {
 const getTime = (player: any) => {
   const time = player.getCurrentTime?.()
   return typeof time == 'number' && Number.isFinite(time) ? time : -1
+}
+
+/* The media element behind the player, as a second opinion. The player API can
+ * report a stale time of its own accord, and acting on that alone means
+ * interrupting playback that was never in trouble -- which the user hears as
+ * the video stopping and starting on its own. */
+const getVideoElement = () => {
+  const video = document.querySelector('#movie_player video')
+  return video instanceof HTMLVideoElement ? video : null
 }
 
 // A backgrounded renderer that stopped filling the media buffer leaves the
@@ -130,12 +161,19 @@ export function installBackgroundGuard() {
       return
     }
 
+    ticksSinceAttempt++
     const state = player.getPlayerState()
     // Progress, not the reported state, is what says playback is healthy: a
     // stalled player goes on calling itself PLAYING with the clock frozen.
     const time = getTime(player)
+    const video = getVideoElement()
+    const videoTime = video ? video.currentTime : -1
     const advancing = time < 0 || time !== lastTime
+    // A video element that is still moving, or that has not been asked to
+    // play at all, is not a stalled one whatever the player API says.
+    const videoStuck = Boolean(video) && !video!.paused && videoTime === lastVideoTime
     lastTime = time
+    lastVideoTime = videoTime
 
     if (advancing && (state === PLAYING || state === BUFFERING)) {
       stalledTicks = 0
@@ -144,10 +182,14 @@ export function installBackgroundGuard() {
         wasPlaying = true
         pausedByInterruption = false
         pausedTicks = 0
-        resumeAttempts = 0
+        healthyTicks++
+        if (healthyTicks >= HEALTHY_TICKS_TO_RESET) {
+          resumeAttempts = 0
+        }
       }
       return
     }
+    healthyTicks = 0
 
     if (!isBackground()) {
       // The user can interact with the page again; whatever is paused now is
@@ -157,6 +199,7 @@ export function installBackgroundGuard() {
       pausedTicks = 0
       resumeAttempts = 0
       stalledTicks = 0
+      ticksSinceAttempt = ATTEMPT_COOLDOWN_TICKS
       return
     }
 
@@ -169,12 +212,19 @@ export function installBackgroundGuard() {
       if (!wasPlaying || pausedByInterruption) {
         return
       }
+      // Both clocks have to have stopped. One of them standing still on its
+      // own is the reading being stale, not the playback being stuck.
+      if (!videoStuck) {
+        stalledTicks = 0
+        return
+      }
       stalledTicks++
-      if (stalledTicks < STALL_TICKS || resumeAttempts >= MAX_RESUME_ATTEMPTS) {
+      if (stalledTicks < STALL_TICKS || !canAttempt()) {
         return
       }
       stalledTicks = 0
       resumeAttempts++
+      ticksSinceAttempt = 0
       log(`background guard: unsticking a stalled player (attempt ${resumeAttempts})`)
       nudgePlayback(player)
       return
@@ -185,7 +235,7 @@ export function installBackgroundGuard() {
       return
     }
     pausedTicks++
-    if (resumeAttempts >= MAX_RESUME_ATTEMPTS) {
+    if (!canAttempt()) {
       return
     }
     if (window.NouTubeI?.canAutoResume?.(bridgeToken()) === false) {
@@ -200,6 +250,7 @@ export function installBackgroundGuard() {
     }
 
     resumeAttempts++
+    ticksSinceAttempt = 0
     const dismissed = confirmYouThereDialogs()
     log(`background guard: resuming (attempt ${resumeAttempts}, dialog: ${dismissed})`)
     // The first attempts assume YouTube paused a healthy player. Once those
