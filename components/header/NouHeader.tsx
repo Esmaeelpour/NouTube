@@ -107,7 +107,7 @@ export const NouHeader: React.FC<{ getNoutube: () => any }> = ({ getNoutube }) =
   const downloads = useValue(downloads$)
   const customScripts = useValue(userStyles$.customScripts)
   const hasDownloads = Object.keys(downloads).length > 0
-  const isDownloading = Object.values(downloads).some((d) => d.phase === 'downloading')
+  const isDownloading = Object.values(downloads).some((d) => d.status === 'downloading' || d.status === 'queued')
   const sleepTimerSupported = hasSleepTimerNativeSupport()
   const { active: sleepTimerActive } = useSleepTimerStatus(sleepTimerSupported)
   const [canGoBack, setCanGoBack] = useState(false)

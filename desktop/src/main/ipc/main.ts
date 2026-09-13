@@ -81,7 +81,16 @@ const interfaces = {
     })
     return result.canceled ? null : result.filePaths[0]
   },
-  downloadVideo: async (url: string, formatId: string, outputDir: string, useCookies = false): Promise<void> => {
+  // downloadId identifies the download on the app side (see lib/download-queue);
+  // desktop does not kill processes by id yet, it only echoes it back with the
+  // progress so the manager can tell its downloads apart.
+  downloadVideo: async (
+    url: string,
+    formatId: string,
+    outputDir: string,
+    useCookies = false,
+    downloadId = '',
+  ): Promise<void> => {
     const binary = await ensureYtDlp()
     // The format id is part of the name because the modal stays open for further formats of the
     // same video: with a plain title, a second format that lands on the same extension makes

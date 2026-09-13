@@ -200,10 +200,16 @@ class NouTubeViewModule : Module() {
       return@Coroutine ytDlp().listFormats(url, useCookies)
     }
 
-    AsyncFunction("downloadVideo") Coroutine { url: String, formatId: String, outputDir: String, useCookies: Boolean ->
+    AsyncFunction("cancelDownload") { downloadId: String ->
+      ytDlp().cancelDownload(downloadId)
+    }
+
+    AsyncFunction("downloadVideo") Coroutine
+      { url: String, formatId: String, outputDir: String, useCookies: Boolean, downloadId: String ->
       try {
-        val result = ytDlp().downloadVideo(url, formatId, outputDir, useCookies) { progress, etaInSeconds, line ->
+        val result = ytDlp().downloadVideo(url, formatId, outputDir, useCookies, downloadId) { progress, etaInSeconds, line ->
           sendEvent("downloadProgress", mapOf(
+            "id" to downloadId,
             "url" to url,
             "progress" to progress,
             "eta" to etaInSeconds,
@@ -214,6 +220,7 @@ class NouTubeViewModule : Module() {
         }
 
         sendEvent("downloadProgress", mapOf(
+          "id" to downloadId,
           "url" to url,
           "progress" to 100f,
           "eta" to 0L,
@@ -224,6 +231,7 @@ class NouTubeViewModule : Module() {
         ))
       } catch (e: Exception) {
         sendEvent("downloadProgress", mapOf(
+          "id" to downloadId,
           "url" to url,
           "progress" to 0f,
           "eta" to 0L,

@@ -1,4 +1,7 @@
 export type ProgressPayload = {
+  /* The download this belongs to (see lib/download-queue). Absent from shells
+   * that predate the manager, where the URL is the only handle. */
+  id?: string
   url: string
   line: string
   done: boolean

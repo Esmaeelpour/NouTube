@@ -24,8 +24,7 @@ import { auth$ } from '@/states/auth'
 import { useMe } from '@/lib/hooks/useMe'
 import { ObservableHint } from '@legendapp/state'
 import { mainClient } from '@/lib/main-client'
-import { onDownloadProgress } from '@/lib/download-progress'
-import { describeDownloadError } from '@/lib/download-error'
+import { installDownloadManager } from '@/lib/downloads'
 import { t } from 'i18next'
 import { downloads$ } from '@/states/downloads'
 import { resolveUserAgent } from '@/lib/useragent'
@@ -478,29 +477,10 @@ export const MainPageContent: React.FC<{ contentJs: string }> = ({ contentJs }) 
       })
     }
 
-    return onDownloadProgress((payload) => {
-      const current = downloads$[payload.url].get()
-      if (!current) return
-
-      if (payload.line) downloads$[payload.url].progressLine.set(payload.line)
-      if (typeof payload.progress === 'number') downloads$[payload.url].progress.set(payload.progress)
-      if (payload.done) {
-        if (payload.error) {
-          console.error('download error', payload)
-          const { messageKey, detail } = describeDownloadError(payload.line || '')
-          downloads$[payload.url].assign({
-            phase: 'error',
-            errorMsg: messageKey ? t(messageKey) : detail || t('modals.downloadFailed'),
-          })
-        } else {
-          downloads$[payload.url].assign({
-            progress: 100,
-            savedPath: payload.filePath || '',
-            phase: 'done',
-          })
-        }
-      }
-    })
+    // Downloads are owned by the manager now: it keeps the queue moving, folds
+    // the progress events onto the right download and remembers the finished
+    // ones (see lib/downloads).
+    installDownloadManager()
   }, [])
 
   // Both native webviews are live at once in the split watch view, so every

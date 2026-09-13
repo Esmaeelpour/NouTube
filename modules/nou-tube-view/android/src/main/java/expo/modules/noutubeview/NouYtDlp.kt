@@ -286,11 +286,22 @@ internal class NouYtDlp(private val context: Context) {
     return options
   }
 
+  // yt-dlp is told which process this is so cancelDownload can kill this one
+  // and not whatever else happens to be running.
+  fun cancelDownload(downloadId: String): Boolean =
+    try {
+      YoutubeDL.getInstance().destroyProcessById(downloadId)
+    } catch (e: Exception) {
+      // Already gone, which is where the caller wanted it.
+      false
+    }
+
   fun downloadVideo(
     url: String,
     formatId: String,
     outputDir: String,
     useCookies: Boolean,
+    downloadId: String,
     onProgress: (progress: Float, etaInSeconds: Long, line: String?) -> Unit,
   ): DownloadResult {
     ensureInitialized()
@@ -320,7 +331,7 @@ internal class NouYtDlp(private val context: Context) {
     var lastLine = ""
 
     try {
-      YoutubeDL.getInstance().execute(request) { progress, etaInSeconds, line ->
+      YoutubeDL.getInstance().execute(request, downloadId) { progress, etaInSeconds, line ->
         lastLine = line ?: lastLine
         onProgress(progress, etaInSeconds, line)
       }

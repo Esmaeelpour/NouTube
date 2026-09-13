@@ -37,7 +37,8 @@
     "updateYtDlp": "Update yt-dlp",
     "updating": "Updating...",
     "ytDlpUpdated": "yt-dlp is up to date",
-    "retry": "Retry"
+    "retry": "Retry",
+    "clearFinished": "Clear finished"
   },
   "library": {
     "videos": "Videos",
@@ -102,7 +103,11 @@
     "playbackQuality": "Playback quality",
     "sharePageUrl": "Page URL",
     "shareVideoUrl": "Video URL",
-    "shareIncludePosition": "Include current position"
+    "shareIncludePosition": "Include current position",
+    "downloadEta": "{{eta}} left",
+    "downloadQueued": "Waiting for the download ahead of it",
+    "downloadCanceled": "Canceled",
+    "downloadSavedAndroid": "Saved to the Downloads folder"
   },
   "update": {
     "check": "Check for updates",

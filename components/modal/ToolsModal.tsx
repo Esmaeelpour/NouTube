@@ -9,6 +9,9 @@ import { NouButton } from '../button/NouButton'
 import { NouSwitch } from '../switch/NouSwitch'
 import { mainClient } from '@/lib/main-client'
 import { downloads$ } from '@/states/downloads'
+import { queueDownload } from '@/lib/downloads'
+import { downloadId, isFinished } from '@/lib/download-queue'
+import { DownloadList } from '../download/DownloadList'
 import { t } from 'i18next'
 import type { FormatOption } from '@/lib/main-client'
 import { findPinnedFormats, togglePinnedFormat } from '@/lib/download-format'
@@ -85,24 +88,16 @@ export const ToolsModal = () => {
     setFormats([])
   }, [isOpen, toolsModalUrl, loadFormats])
 
-  const openSavedFile = (savedPath: string) => {
-    Promise.resolve(mainClient.openFile(savedPath)).catch((err: any) => {
-      console.error('failed to open file', err)
-    })
-  }
-
   // The format list stays up after a download starts, so another format of the same video can
-  // be grabbed without resolving the URL again.
-  const handleDownload = (formatId: string) => {
+  // be grabbed without resolving the URL again -- and now it keeps its own place in the queue
+  // rather than taking over the one already running.
+  const handleDownload = (opt: FormatOption) => {
     const targetUrl = loadedUrl || toolsModalUrl || url
-    downloads$[targetUrl].set({
+    queueDownload({
       url: targetUrl,
       title: parsedTitle || targetUrl,
-      phase: 'downloading',
-      progress: 0,
-      progressLine: '',
-      errorMsg: '',
-      savedPath: '',
+      formatId: opt.formatId,
+      formatLabel: opt.label || opt.formatId,
     })
 
     // The progress card sits above the format list, which can be long enough that the card is
@@ -114,9 +109,6 @@ export const ToolsModal = () => {
       scrollToDownloadsRef.current = true
     }
 
-    mainClient.downloadVideo(targetUrl, formatId, effectiveDownloadPath, useCookies).catch(() => {
-      // handled via downloadProgress done+error
-    })
   }
 
   const scrollToDownloads = () => {
@@ -137,16 +129,16 @@ export const ToolsModal = () => {
     ...listedFormats.filter((opt) => !pinnedByFormatId.has(opt.formatId)),
   ]
 
-  // Downloads are tracked per URL, so a second format of the same video would take over the
-  // progress of the running one — one at a time per video.
-  const isDownloadingCurrent = activeDownloads[loadedUrl]?.phase === 'downloading'
+  // Only the format already on its way is spoken for; every other one can still be queued.
+  const pendingFormat = (formatId: string) => {
+    const existing = activeDownloads[downloadId(loadedUrl || toolsModalUrl || url, formatId)]
+    return Boolean(existing) && !isFinished(existing as any)
+  }
 
   const togglePin = (opt: FormatOption) => {
     settings$.downloadPresets.set(togglePinnedFormat(presets, opt, pinnedByFormatId.get(opt.formatId)))
   }
 
-  const activeDownloadUrls = Object.keys(activeDownloads).reverse()
-  const getProgressValue = (value: number) => Math.min(100, Math.max(0, Number.isFinite(value) ? value : 0))
 
   return (
     <BaseModal onClose={onClose}>
@@ -222,141 +214,15 @@ export const ToolsModal = () => {
           </View>,
         )}
 
-        {activeDownloadUrls.length > 0 && (
-          <View
-            className="gap-4"
-            onLayout={(e) => {
-              downloadsSectionYRef.current = e.nativeEvent.layout.y
-              if (scrollToDownloadsRef.current) {
-                scrollToDownloadsRef.current = false
-                scrollToDownloads()
-              }
-            }}
-          >
-            <View className="flex-row items-center justify-between">
-              <NouText className="text-sm font-bold uppercase tracking-widest text-zinc-500">
-                {t('modals.downloadHistory')}
-              </NouText>
-              <Pressable
-                onPress={() => {
-                  downloads$.set({})
-                }}
-                className="px-2 py-1 rounded-md active:bg-zinc-200 dark:active:bg-zinc-800"
-              >
-                <NouText className="text-xs text-zinc-500 font-medium">{t('buttons.clearAll')}</NouText>
-              </Pressable>
-            </View>
-            {activeDownloadUrls.map((dUrl) => {
-              const d = activeDownloads[dUrl]
-              return (
-                <View
-                  key={dUrl}
-                  className={
-                    d.phase === 'done'
-                      ? 'rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 p-4 gap-2'
-                      : d.phase === 'error'
-                        ? 'rounded-xl border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4 gap-2'
-                        : 'rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50/70 dark:bg-sky-950/30 p-4 gap-2'
-                  }
-                >
-                  <View className="flex-row items-start justify-between gap-3">
-                    <Pressable
-                      className="flex-1 gap-1"
-                      disabled={d.phase !== 'done' || !d.savedPath}
-                      onPress={() => openSavedFile(d.savedPath)}
-                    >
-                      <NouText className="text-sm font-semibold text-zinc-900 dark:text-zinc-100" numberOfLines={2}>
-                        {d.title || dUrl}
-                      </NouText>
-                    </Pressable>
-                    {nIf(
-                      d.phase === 'error',
-                      <MaterialIcons name="error-outline" size={18} color={isDark ? '#f87171' : '#dc2626'} />,
-                    )}
-                    {nIf(
-                      d.phase === 'downloading',
-                      <ActivityIndicator size="small" color={isDark ? '#7dd3fc' : '#0284c7'} />,
-                    )}
-                  </View>
-                  {d.phase === 'downloading' && (
-                    <View className="h-2 overflow-hidden rounded-full bg-sky-100 dark:bg-sky-950">
-                      <View
-                        className="h-full rounded-full bg-sky-500 dark:bg-sky-400"
-                        style={{ width: `${Math.max(2, getProgressValue(d.progress))}%` }}
-                      />
-                    </View>
-                  )}
-                  {d.phase === 'downloading' && (
-                    <NouText className="text-sm text-sky-700 dark:text-sky-200 font-mono" numberOfLines={2}>
-                      {d.progressLine || t('modals.starting')}
-                    </NouText>
-                  )}
-                  {d.phase === 'done' && (
-                    <View className="gap-2">
-                      <View className="mt-1 flex-row items-center gap-2">
-                        <View className="flex-1 shrink flex-row items-center gap-2 mr-auto">
-                          <MaterialIcons name="check-circle" size={18} color={isDark ? '#86efac' : '#16a34a'} />
-                          <NouText className="flex-1 text-xs text-zinc-500 dark:text-zinc-400" numberOfLines={2}>
-                            {isAndroid ? 'Saved to the Downloads folder' : t('modals.downloadComplete')}
-                          </NouText>
-                        </View>
-                        {!!d.savedPath && (
-                          <Pressable
-                            onPress={() => openSavedFile(d.savedPath)}
-                            className="bg-zinc-200 dark:bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-300 dark:active:bg-zinc-700"
-                          >
-                            <NouText className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                              {t('buttons.open')}
-                            </NouText>
-                          </Pressable>
-                        )}
-                        {!!d.savedPath && !isAndroid && (
-                          <Pressable
-                            onPress={() => mainClient.openFolder(d.savedPath)}
-                            className="bg-zinc-200 dark:bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-300 dark:active:bg-zinc-700"
-                          >
-                            <NouText className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                              {t('buttons.show')}
-                            </NouText>
-                          </Pressable>
-                        )}
-                        <Pressable
-                          onPress={() => {
-                            downloads$[dUrl].delete()
-                          }}
-                          className="bg-zinc-200 dark:bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-300 dark:active:bg-zinc-700"
-                        >
-                          <NouText className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            {t('buttons.clear')}
-                          </NouText>
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
-                  {d.phase === 'error' && (
-                    <View className="gap-2">
-                      <NouText className="text-sm text-red-700 dark:text-red-300 font-medium">
-                        {d.errorMsg || t('modals.downloadFailed')}
-                      </NouText>
-                      <View className="flex-row justify-end mt-1">
-                        <Pressable
-                          onPress={() => {
-                            downloads$[dUrl].delete()
-                          }}
-                          className="bg-zinc-200 dark:bg-zinc-800 px-3 py-1.5 rounded-lg active:bg-zinc-300 dark:active:bg-zinc-700"
-                        >
-                          <NouText className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            {t('buttons.clear')}
-                          </NouText>
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )
-            })}
-          </View>
-        )}
+        <DownloadList
+          onLayout={(e) => {
+            downloadsSectionYRef.current = e.nativeEvent.layout.y
+            if (scrollToDownloadsRef.current) {
+              scrollToDownloadsRef.current = false
+              scrollToDownloads()
+            }
+          }}
+        />
         {phase === 'loading' && <ActivityIndicator color={isDark ? 'white' : '#3f3f46'} />}
 
         {phase === 'choosing' && (
@@ -402,10 +268,10 @@ export const ToolsModal = () => {
                       />
                     </Pressable>
                     <Pressable
-                      disabled={isDownloadingCurrent}
-                      onPress={() => handleDownload(opt.formatId)}
+                      disabled={pendingFormat(opt.formatId)}
+                      onPress={() => handleDownload(opt)}
                       className={
-                        isDownloadingCurrent
+                        pendingFormat(opt.formatId)
                           ? 'h-11 w-11 items-center justify-center rounded-full bg-zinc-300 dark:bg-zinc-700'
                           : 'h-11 w-11 items-center justify-center rounded-full bg-indigo-600 dark:bg-indigo-500 active:bg-indigo-700 dark:active:bg-indigo-400'
                       }

@@ -19,7 +19,10 @@ export interface MainClient {
   clearData(): Promise<void> | void
   toggleInterception(enabled: boolean): Promise<void> | void
   listFormats(url: string, useCookies: boolean): Promise<{ title: string; formats: FormatOption[] }>
-  downloadVideo(url: string, formatId: string, outputDir: string, useCookies: boolean): Promise<void>
+  /* downloadId identifies this download in the progress events and is what
+   * cancelDownload kills. */
+  downloadVideo(url: string, formatId: string, outputDir: string, useCookies: boolean, downloadId: string): Promise<void>
+  cancelDownload(downloadId: string): Promise<boolean>
   getDownloadsPath(): Promise<string>
   selectFolder(): Promise<string | null>
   openFolder(filePath: string): Promise<void> | void
@@ -37,6 +40,7 @@ export interface MainClient {
 type NouTubeDownloadClient = {
   listFormats?: MainClient['listFormats']
   downloadVideo?: MainClient['downloadVideo']
+  cancelDownload?: MainClient['cancelDownload']
   getDownloadsPath?: MainClient['getDownloadsPath']
   openFile?: MainClient['openFile']
   updateYtDlp?: MainClient['updateYtDlp']
@@ -53,11 +57,17 @@ export const mainClient: MainClient = {
     }
     return nativeModule.listFormats(url, useCookies)
   },
-  async downloadVideo(url, formatId, outputDir, useCookies) {
+  async downloadVideo(url, formatId, outputDir, useCookies, downloadId) {
     if (typeof nativeModule.downloadVideo !== 'function') {
       throw new Error('download API unavailable')
     }
-    return nativeModule.downloadVideo(url, formatId, outputDir, useCookies)
+    return nativeModule.downloadVideo(url, formatId, outputDir, useCookies, downloadId)
+  },
+  async cancelDownload(downloadId) {
+    if (typeof nativeModule.cancelDownload !== 'function') {
+      return false
+    }
+    return nativeModule.cancelDownload(downloadId)
   },
   async getDownloadsPath() {
     if (typeof nativeModule.getDownloadsPath !== 'function') {

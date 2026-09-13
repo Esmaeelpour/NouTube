@@ -36,7 +36,16 @@ declare class NouTubeViewModule extends NativeModule {
     url: string,
     useCookies: boolean,
   ): Promise<{ title: string; formats: Array<{ formatId: string; label: string; description: string }> }>
-  downloadVideo(url: string, formatId: string, outputDir: string, useCookies: boolean): Promise<void>
+  downloadVideo(
+    url: string,
+    formatId: string,
+    outputDir: string,
+    useCookies: boolean,
+    downloadId: string,
+  ): Promise<void>
+  /* Kills the yt-dlp process of a running download; false when it had already
+   * finished on its own. */
+  cancelDownload(downloadId: string): Promise<boolean>
   getDownloadsPath(): Promise<string>
   updateYtDlp(): Promise<void>
   setLocaleStrings(strings: Record<string, string>): void
