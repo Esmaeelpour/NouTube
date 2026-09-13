@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import { normalizeBlocklist } from './blocklist'
 import {
+  RE_INTERCEPT,
+  filterPlayerResponse,
   transformBrowseResponse,
   transformGetWatchResponse,
   transformPlayerResponse,
@@ -469,5 +471,45 @@ describe('intercept ad blocking', () => {
     const items = feedItems(transformBrowseResponse(JSON.stringify(feed()), blocked, { blockAds: false }))
     expect(items).toHaveLength(1)
     expect(items[0].richItemRenderer.content.adSlotRenderer).toBeDefined()
+  })
+})
+
+describe('RE_INTERCEPT', () => {
+  it('takes the endpoints it transforms', () => {
+    expect('/youtubei/v1/player'.match(RE_INTERCEPT)?.[1]).toBe('player')
+    expect('/youtubei/v1/get_watch'.match(RE_INTERCEPT)?.[1]).toBe('get_watch')
+    // Sub-paths other than the heartbeat are matched as they always were.
+    expect('/youtubei/v1/player/ad_break'.match(RE_INTERCEPT)?.[1]).toBe('player')
+  })
+
+  it('leaves the watch-time heartbeat alone', () => {
+    expect('/youtubei/v1/player/heartbeat'.match(RE_INTERCEPT)).toBeNull()
+  })
+})
+
+describe('filterPlayerResponse', () => {
+  const withAds = () => ({
+    adPlacements: [{}],
+    adSlots: [{}],
+    playerAds: [{}],
+    adBreakHeartbeatParams: 'x',
+    videoDetails: { title: 'A video' },
+  })
+
+  it('strips the ads out of a server-rendered player response', () => {
+    const data = filterPlayerResponse(withAds())
+    expect(data.adPlacements).toBeUndefined()
+    expect(data.adSlots).toBeUndefined()
+    expect(data.playerAds).toBeUndefined()
+    expect(data.adBreakHeartbeatParams).toBeUndefined()
+    expect(data.videoDetails.title).toBe('A video')
+  })
+
+  it('leaves them where the user asked for them', () => {
+    expect(filterPlayerResponse(withAds(), { blockAds: false }).adPlacements).toHaveLength(1)
+  })
+
+  it('survives a page that has no player response yet', () => {
+    expect(filterPlayerResponse(undefined)).toBeUndefined()
   })
 })

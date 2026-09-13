@@ -1,6 +1,7 @@
 import {
   RE_INTERCEPT,
   filterListResponse,
+  filterPlayerResponse,
   transformBrowseResponse,
   transformGetWatchResponse,
   transformPlayerResponse,
@@ -24,6 +25,30 @@ export function intercept() {
         console.error('NouScript initialData:', error)
       }
       initialData = value
+    },
+    configurable: true,
+  })
+
+  /* The same for the player response the server renders into a watch page.
+   * Only navigations through the router fetch one; a page opened as a fresh
+   * document -- a deep link, the restored video, the first video opened in the
+   * player webview -- reads this instead, ads and all. */
+  let initialPlayerResponse = (window as any).ytInitialPlayerResponse
+  Object.defineProperty(window, 'ytInitialPlayerResponse', {
+    get() {
+      return initialPlayerResponse
+    },
+    set(value) {
+      try {
+        const settings = window.NouTube?.getSettings?.()
+        filterPlayerResponse(value, {
+          showOriginalVideoTitle: Boolean(settings?.showOriginalVideoTitle),
+          blockAds: adsBlocked(),
+        })
+      } catch (error) {
+        console.error('NouScript initialPlayerResponse:', error)
+      }
+      initialPlayerResponse = value
     },
     configurable: true,
   })
