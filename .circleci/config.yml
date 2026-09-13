@@ -1,0 +1,182 @@
+version: 2.1
+
+# Mirrors .github/workflows/test.yml and build.yml. The APK is built on every
+# push to main (unsigned unless the signing vars are set) and on v* tags, where
+# it is signed and attached to the GitHub release.
+
+executors:
+  # cimg/android ships the Android SDK, JDK 17 and Node; bun is installed by the
+  # install_bun command below.
+  android:
+    docker:
+      - image: cimg/android:2024.11.1-node
+    resource_class: medium
+    working_directory: ~/noutube
+    environment:
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m" -Dorg.gradle.daemon=false
+      JAVA_TOOL_OPTIONS: -Xmx3g
+
+commands:
+  install_bun:
+    steps:
+      - run:
+          name: install bun
+          command: |
+            curl -fsSL https://bun.sh/install | bash
+            echo 'export BUN_INSTALL="$HOME/.bun"' >> "$BASH_ENV"
+            echo 'export PATH="$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: bun version
+          command: bun --version
+
+  install_deps:
+    steps:
+      - restore_cache:
+          keys:
+            - bun-v1-{{ checksum "bun.lock" }}
+            - bun-v1-
+      - run:
+          name: install
+          command: |
+            bun link
+            bun install --frozen-lockfile
+      - save_cache:
+          key: bun-v1-{{ checksum "bun.lock" }}
+          paths:
+            - ~/.bun/install/cache
+
+  prebuild_android:
+    steps:
+      - run:
+          name: prebuild
+          command: bun expo prebuild -p android --clean --no-install
+
+jobs:
+  test:
+    docker:
+      - image: cimg/base:current
+    working_directory: ~/noutube
+    steps:
+      - checkout
+      - install_bun
+      - install_deps
+      - run:
+          name: test
+          command: bun test
+
+  android-test:
+    executor: android
+    steps:
+      - checkout
+      - install_bun
+      - install_deps
+      - prebuild_android
+      - restore_cache:
+          keys:
+            - gradle-v1-{{ checksum "android/gradle/wrapper/gradle-wrapper.properties" }}
+            - gradle-v1-
+      - run:
+          name: test Android module
+          command: ./gradlew :nou-tube-view:testFullDebugUnitTest :nou-tube-view:testFossDebugUnitTest
+          working_directory: ~/noutube/android
+      - save_cache:
+          key: gradle-v1-{{ checksum "android/gradle/wrapper/gradle-wrapper.properties" }}
+          paths:
+            - ~/.gradle/caches
+            - ~/.gradle/wrapper
+      - store_test_results:
+          path: modules/nou-tube-view/android/build/test-results
+
+  build:
+    executor: android
+    steps:
+      - checkout
+      - install_bun
+      - install_deps
+      - run:
+          name: bundle content script
+          command: bun bundle:es
+      - prebuild_android
+      - restore_cache:
+          keys:
+            - gradle-v1-{{ checksum "android/gradle/wrapper/gradle-wrapper.properties" }}
+            - gradle-v1-
+      - run:
+          name: build apk
+          command: ./gradlew assembleFullRelease
+          working_directory: ~/noutube/android
+      - save_cache:
+          key: gradle-v1-{{ checksum "android/gradle/wrapper/gradle-wrapper.properties" }}
+          paths:
+            - ~/.gradle/caches
+            - ~/.gradle/wrapper
+      # The unsigned APK is still useful on branch builds, so signing is skipped
+      # rather than failed when the project has no signing vars configured.
+      - run:
+          name: sign apk
+          command: |
+            set -euo pipefail
+            cd android/app/build/outputs/apk/full/release
+            if [ -z "${SIGNING_KEY:-}" ]; then
+              echo "SIGNING_KEY not set, leaving the apk unsigned"
+              exit 0
+            fi
+            BUILD_TOOLS_DIR=$(ls -d "$ANDROID_HOME"/build-tools/* | tail -n 1)
+            echo "$SIGNING_KEY" | base64 -d > keystore.jks
+            for apk in *-unsigned.apk; do
+              "$BUILD_TOOLS_DIR/zipalign" -p -f 4 "$apk" aligned.apk
+              "$BUILD_TOOLS_DIR/apksigner" sign \
+                --ks keystore.jks \
+                --ks-key-alias "$ALIAS" \
+                --ks-pass "pass:$KEY_STORE_PASSWORD" \
+                --key-pass "pass:$KEY_PASSWORD" \
+                --out "${apk%-unsigned.apk}.apk" \
+                aligned.apk
+              rm -f aligned.apk "$apk"
+            done
+            rm -f keystore.jks
+      - store_artifacts:
+          path: android/app/build/outputs/apk/full/release
+          destination: apk
+      - run:
+          name: upload apk to the github release
+          command: |
+            set -euo pipefail
+            if [ -z "${CIRCLE_TAG:-}" ]; then
+              echo "not a tag build, skipping the release upload"
+              exit 0
+            fi
+            if [ -z "${GITHUB_TOKEN:-}" ]; then
+              echo "GITHUB_TOKEN not set, skipping the release upload"
+              exit 0
+            fi
+            if ! command -v gh > /dev/null; then
+              sudo apt-get update && sudo apt-get install -y gh
+            fi
+            VERSION_CODE=$(node -p "require('./package.json').versionCode")
+            gh release create "$CIRCLE_TAG" \
+              --notes-file "metadata/en-US/changelogs/${VERSION_CODE}04.txt" \
+              android/app/build/outputs/apk/full/release/*-release.apk \
+              || gh release upload "$CIRCLE_TAG" \
+                android/app/build/outputs/apk/full/release/*-release.apk --clobber
+
+workflows:
+  ci:
+    jobs:
+      - test:
+          filters:
+            tags:
+              only: /^v.*/
+      - android-test:
+          filters:
+            tags:
+              only: /^v.*/
+      - build:
+          requires:
+            - test
+            - android-test
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              only: main
