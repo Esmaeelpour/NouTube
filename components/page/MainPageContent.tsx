@@ -570,6 +570,17 @@ export const MainPageContent: React.FC<{ contentJs: string }> = ({ contentJs }) 
     // first time from 0.
     const lastPlaying = settings$.restoreOnStart.get() ? getLastPlaying() : undefined
     const home = isYTMusic ? 'https://music.youtube.com' : 'https://m.youtube.com'
+    // A deep link is served before this runs (app/index.tsx reads it as it
+    // mounts, and this page waits on its content script first), and it is the
+    // video the user actually asked for. Restoring the last playing one over it
+    // would hand the player yesterday's video instead: give the browsing half
+    // its page and leave the player with what it was given.
+    if (ui$.playerUrl.peek()) {
+      restored = true
+      skipFirstUrlObserve.current = true
+      ui$.url.set(home)
+      return
+    }
     if (lastPlaying) {
       restored = true
       const url = normalizeUrl(lastPlaying.url)
