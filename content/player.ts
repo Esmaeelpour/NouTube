@@ -315,22 +315,36 @@ document.addEventListener(
   true,
 )
 
+// Leaving fullscreen waits to see whether the phone stays that way. Turning it
+// end over end passes through portrait on the way to the other landscape, and a
+// phone set down on a desk reports one too -- acting on either takes the user
+// out of a fullscreen they never asked to leave.
+const ORIENTATION_SETTLE_MS = 600
+let exitFullscreenTimer: ReturnType<typeof setTimeout> | undefined
+
 screen.orientation.addEventListener('change', (event) => {
   if (window.NouTubePip || document.location.pathname != '/watch' || document.visibilityState != 'visible') {
     return
   }
 
+  clearTimeout(exitFullscreenTimer)
   const target = event.target as any
   const type = target.type
   if (type.includes('landscape')) {
     if (!document.fullscreenElement && screen.availWidth < 1000) {
       ;(document.querySelector('#player-control-container .fullscreen-icon') as HTMLButtonElement)?.click()
     }
-  } else {
-    if (document.fullscreenElement) {
+    return
+  }
+  if (!document.fullscreenElement) {
+    return
+  }
+  exitFullscreenTimer = setTimeout(() => {
+    // Still portrait once the turn is over, so it was meant.
+    if (document.fullscreenElement && !screen.orientation.type.includes('landscape')) {
       document.exitFullscreen()
     }
-  }
+  }, ORIENTATION_SETTLE_MS)
 })
 
 export async function playDefaultAudio() {
