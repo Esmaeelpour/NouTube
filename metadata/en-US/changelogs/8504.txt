@@ -1,0 +1,1 @@
+- Keep YouTube's own watch progress reporting intact, so other devices resume where you left off
