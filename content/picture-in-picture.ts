@@ -2,6 +2,58 @@ const styleId = '_nou_pip'
 const ancestorClass = '_nou_pip_ancestor'
 let transition = 0
 let outerDimensions: Map<string, PropertyDescriptor | undefined> | undefined
+let ancestorObserver: MutationObserver | undefined
+let remarkTimer: ReturnType<typeof setTimeout> | undefined
+
+// Everything but the video and the chain it hangs from is hidden while pinned,
+// and that chain is marked by hand. The next video -- autoplay, the queue, or
+// one opened from the app -- arrives through YouTube's router rather than as a
+// new document, so the style survives it while the marks do not: the new
+// player would be built inside a display:none ancestor, where it neither
+// renders nor starts. Re-mark whatever the page is playing now instead.
+function markVideoAncestors() {
+  const video = document.querySelector('video')
+  const wanted = new Set<Element>()
+  for (let parent = video?.parentElement; parent; parent = parent.parentElement) {
+    wanted.add(parent)
+  }
+  for (const marked of document.querySelectorAll('.' + ancestorClass)) {
+    if (!wanted.has(marked)) {
+      marked.classList.remove(ancestorClass)
+    }
+  }
+  for (const parent of wanted) {
+    parent.classList.add(ancestorClass)
+  }
+}
+
+// The marks are class changes on the very nodes being watched, so re-marking
+// feeds the observer its own work: coalesce into one pass per turn of events.
+function scheduleRemark() {
+  if (remarkTimer || !window.NouTubePip) {
+    return
+  }
+  remarkTimer = setTimeout(() => {
+    remarkTimer = undefined
+    if (window.NouTubePip) {
+      markVideoAncestors()
+    }
+  }, 200)
+}
+
+function watchVideoAncestors() {
+  markVideoAncestors()
+  window.addEventListener('yt-navigate-finish', scheduleRemark)
+  ancestorObserver ||= new MutationObserver(scheduleRemark)
+  ancestorObserver.observe(document.body, { childList: true, subtree: true })
+}
+
+function unwatchVideoAncestors() {
+  clearTimeout(remarkTimer)
+  remarkTimer = undefined
+  window.removeEventListener('yt-navigate-finish', scheduleRemark)
+  ancestorObserver?.disconnect()
+}
 
 // YouTube uses outer window area to detect background playback on Android.
 // Keep that measurement stable during native PiP; innerWidth/innerHeight still
@@ -22,6 +74,7 @@ export async function setPictureInPicture(active: boolean) {
   if (!active) {
     const wasPlaying = !document.querySelector('video')?.paused
     window.NouTubePip = false
+    unwatchVideoAncestors()
     document.getElementById(styleId)?.remove()
     document.querySelectorAll('.' + ancestorClass).forEach((element) => element.classList.remove(ancestorClass))
     // Android reports PiP exit before the expansion animation has finished.
@@ -42,10 +95,7 @@ export async function setPictureInPicture(active: boolean) {
   if (document.fullscreenElement) await document.exitFullscreen()
   if (!window.NouTubePip) return
   document.getElementById(styleId)?.remove()
-  const video = document.querySelector('video')
-  for (let parent = video?.parentElement; parent; parent = parent.parentElement) {
-    parent.classList.add(ancestorClass)
-  }
+  watchVideoAncestors()
   const style = document.createElement('style')
   style.id = styleId
   style.textContent = `
