@@ -1,10 +1,11 @@
 import { isFullscreen } from './fullscreen-controls'
+import { log } from './utils'
 
 /* Temporary diagnostic: why a tap on YouTube's own fullscreen settings gear
  * never reaches it. Logs, for every tap in fullscreen, what is actually on top
- * at that point, and where the gear thinks it is. Console messages reach
- * logcat, so this is readable with adb on a release build. Remove once the
- * cause is known. */
+ * at that point, and where the gear thinks it is. It goes out through the
+ * app's own log bridge, which reaches logcat, so this is readable with adb
+ * on a release build. Remove once the cause is known. */
 
 const describe = (element: Element | null) => {
   if (!element) {
@@ -33,8 +34,8 @@ function logGear() {
       const rect = element.getBoundingClientRect()
       const x = Math.round(rect.left + rect.width / 2)
       const y = Math.round(rect.top + rect.height / 2)
-      console.log(`[nou-probe] gear ${selector} -> ${describe(element)}`)
-      console.log(
+      log(`[nou-probe] gear ${selector} -> ${describe(element)}`)
+      log(
         `[nou-probe] gear top-at-centre ${x},${y}: ` +
           document
             .elementsFromPoint(x, y)
@@ -74,7 +75,7 @@ function logSheets(fullscreenElement: Element | null) {
     if (style.display === 'none' || style.visibility === 'hidden') {
       continue
     }
-    console.log(
+    log(
       `[nou-probe] sheet inFs=${fullscreenElement ? fullscreenElement.contains(element) : 'n/a'} ${describe(element)}`,
     )
   }
@@ -90,7 +91,7 @@ export function installFullscreenProbe() {
       const touch = event.touches[0]
       const x = Math.round(touch.clientX)
       const y = Math.round(touch.clientY)
-      console.log(
+      log(
         `[nou-probe] tap ${x},${y} dpr=${window.devicePixelRatio} vw=${window.innerWidth}x${window.innerHeight}: ` +
           document.elementsFromPoint(x, y).slice(0, 5).map(describe).join(' >> '),
       )
