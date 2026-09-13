@@ -520,6 +520,26 @@ export const MainPageContent: React.FC<{ contentJs: string }> = ({ contentJs }) 
     }
   }, [nativeViews])
 
+  /* The role reaches a page in its prelude, which is only read at document
+   * start: a page already open when the split watch view was switched on never
+   * got one, and a page with no role installs no handoff -- so the browsing
+   * webview follows a video link itself and the same video ends up open in both
+   * halves. Hand it to the live pages as well. */
+  const syncSplitRoles = useCallback(() => {
+    const enabled = settings$.miniPlayer.peek()
+    for (const [ref, role] of [
+      [nativeRef.current, 'browse'],
+      [playerRef.current, 'player'],
+    ] as const) {
+      if (!ref) continue
+      try {
+        void (ref as any)
+          .executeJavaScript(`window.NouTube?.setSplitRole?.(${enabled ? JSON.stringify(role) : 'null'})`)
+          ?.catch?.(() => undefined)
+      } catch {}
+    }
+  }, [])
+
   const syncSettingsToWebview = useCallback(() => {
     const settings = getContentSettingsSnapshot()
     const value = JSON.stringify(settings)
@@ -908,7 +928,11 @@ export const MainPageContent: React.FC<{ contentJs: string }> = ({ contentJs }) 
   useObserveEffect(settings$.blockAds, () => syncSettingsToWebview())
   useObserveEffect(settings$.playbackRate, () => syncSettingsToWebview())
   useObserveEffect(settings$.playbackQuality, () => syncSettingsToWebview())
-  useObserveEffect(settings$.miniPlayer, () => syncSettingsToWebview())
+  useObserveEffect(settings$.miniPlayer, () => {
+    syncSettingsToWebview()
+    // Turning the split on or off changes which half each live page is.
+    syncSplitRoles()
+  })
   useObserveEffect(settings$.pictureInPicture, () => syncSettingsToWebview())
   useObserveEffect(settings$.showDislikes, () => syncSettingsToWebview())
   useObserveEffect(settings$.showOriginalVideoTitle, () => syncSettingsToWebview())

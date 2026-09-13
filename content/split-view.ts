@@ -48,10 +48,16 @@ function handoff(url: URL, current: Role) {
   emit(current === 'browse' ? 'open-watch' : 'open-page', { url: url.href })
 }
 
-function installClickHandoff(current: Role) {
+function installClickHandoff() {
   document.addEventListener(
     'click',
     (event: MouseEvent) => {
+      // Read per event rather than at install time: a page that was already
+      // open when the split was switched on gets its role later (setSplitRole).
+      const current = role()
+      if (!current) {
+        return
+      }
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) {
         return
       }
@@ -91,12 +97,15 @@ function installPlayerHistoryCollapse() {
 /* Anything that reached the wrong page without a link -- YouTube's own
  * redirects, autoplay, a script navigation -- is handed over after the fact and
  * the page is sent back where it came from. */
-function installNavigationGuard(current: Role) {
+let runNavigationCheck: (() => void) | undefined
+
+function installNavigationGuard() {
   let lastHandled = ''
 
   const check = () => {
+    const current = role()
     const url = resolve(location.href)
-    if (!url || !belongsToOtherView(url, current)) {
+    if (!current || !url || !belongsToOtherView(url, current)) {
       lastHandled = ''
       return
     }
@@ -122,6 +131,7 @@ function installNavigationGuard(current: Role) {
     }, SETTLE_MS)
   }
 
+  runNavigationCheck = check
   window.addEventListener('popstate', later)
   window.addEventListener('yt-navigate-finish', later)
   document.addEventListener('yt-navigate-finish', later)
@@ -273,9 +283,39 @@ export function setMuted(next: boolean) {
   }
 }
 
+let playerExtrasInstalled = false
+
+function installPlayerExtras() {
+  if (playerExtrasInstalled) {
+    return
+  }
+  playerExtrasInstalled = true
+  installSplitPlayerWindow()
+  installPlayerHistoryCollapse()
+}
+
+/**
+ * The half this webview is, handed down by the app.
+ *
+ * It normally arrives in the prelude, at document start. A page that was
+ * already open when the split watch view was switched on never got one, and
+ * without a role the handoff below stands aside -- which is how the browsing
+ * webview follows a video link itself and the same video ends up open in both
+ * halves at once. So the app pushes it to live pages too, and everything reads
+ * it when it runs rather than when it was installed.
+ */
+export function setSplitRole(next: unknown) {
+  const value = next === 'browse' || next === 'player' ? next : null
+  ;(window as any).NouTubeRole = value ?? undefined
+  if (value === 'player') {
+    installPlayerExtras()
+  }
+  // Whatever is open here may already belong to the other half.
+  runNavigationCheck?.()
+}
+
 export function installSplitView() {
-  const current = role()
-  if (!current || location.host === 'music.youtube.com') {
+  if (location.host === 'music.youtube.com') {
     return
   }
   const root = window as any
@@ -284,12 +324,17 @@ export function installSplitView() {
   }
   root.__nouSplitViewInstalled = true
 
-  installClickHandoff(current)
-  installNavigationGuard(current)
-  if (current === 'player') {
-    installSplitPlayerWindow()
-    installPlayerHistoryCollapse()
+  // Installed whether or not the role is here yet: both stand aside until one
+  // arrives, and start working the moment it does.
+  installClickHandoff()
+  installNavigationGuard()
+  if (role() === 'player') {
+    installPlayerExtras()
   }
+  // This page may already be in the wrong half -- a browsing webview left on a
+  // watch page from before the split was switched on -- so check where it is,
+  // not only where it goes next.
+  runNavigationCheck?.()
 
   // A load inside the mini player -- the queue advancing, say -- starts the
   // page over, so the app hands the mode down with the prelude and it is

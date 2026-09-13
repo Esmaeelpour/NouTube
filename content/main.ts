@@ -18,7 +18,7 @@ import { installPlayerGestures } from './player-gestures'
 import { installSystemCaptionStyle } from './captions'
 import { installEncodedAuthorNameFix } from './author-names'
 import { installBackgroundGuard } from './background-guard'
-import { installSplitView, navigateWatch, setMuted, setNativeMini } from './split-view'
+import { installSplitView, navigateWatch, setMuted, setNativeMini, setSplitRole } from './split-view'
 
 try {
   if ((window as any).NouTubePreferH264) {
@@ -33,6 +33,7 @@ try {
   window.NouTube = initNouTube()
   ;(window.NouTube as any).setMuted = setMuted
   ;(window.NouTube as any).setNativeMini = setNativeMini
+  ;(window.NouTube as any).setSplitRole = setSplitRole
   ;(window.NouTube as any).navigateWatch = navigateWatch
   interceptClipboard()
   installWatchNavigation()
