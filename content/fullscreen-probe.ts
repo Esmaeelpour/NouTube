@@ -46,6 +46,40 @@ function logGear() {
   }
 }
 
+
+/* If the gear is reached but nothing appears, the menu is being rendered
+ * outside the fullscreen element, where nothing renders. Log what turned up in
+ * the document after the tap, and whether it is inside the fullscreen subtree. */
+function logSheets(fullscreenElement: Element | null) {
+  const candidates = new Set<Element>()
+  for (const selector of [
+    'dialog',
+    '[role="dialog"]',
+    '[role="menu"]',
+    '[class*="sheet" i]',
+    '[class*="popup" i]',
+    '[class*="menu" i]',
+    'ytm-sheet-container',
+  ]) {
+    for (const element of document.querySelectorAll(selector)) {
+      candidates.add(element)
+    }
+  }
+  for (const element of candidates) {
+    const rect = element.getBoundingClientRect()
+    if (rect.width < 40 || rect.height < 40) {
+      continue
+    }
+    const style = getComputedStyle(element)
+    if (style.display === 'none' || style.visibility === 'hidden') {
+      continue
+    }
+    console.log(
+      `[nou-probe] sheet inFs=${fullscreenElement ? fullscreenElement.contains(element) : 'n/a'} ${describe(element)}`,
+    )
+  }
+}
+
 export function installFullscreenProbe() {
   document.addEventListener(
     'touchstart',
@@ -61,6 +95,7 @@ export function installFullscreenProbe() {
           document.elementsFromPoint(x, y).slice(0, 5).map(describe).join(' >> '),
       )
       logGear()
+      setTimeout(() => logSheets(document.fullscreenElement), 600)
     },
     { capture: true, passive: true },
   )
