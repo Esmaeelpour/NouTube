@@ -1,0 +1,3 @@
+- Remove the brightness and volume gestures
+- Keep fullscreen when the phone turns through portrait
+- Fix the played part of the progress bar trailing the scrubber
