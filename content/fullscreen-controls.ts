@@ -119,7 +119,10 @@ function blockEvent(event: Event) {
     return
   }
   const target = event.target
-  if (target instanceof Element && target.closest(`#${panelId}, .${unlockBtnClass}`)) {
+  // The button too: the tap that opened the panel installs this blocker from
+  // its own touchend, so a compat click that still slips through afterwards
+  // belongs to that tap and must not be read as a tap outside the panel.
+  if (target instanceof Element && target.closest(`#${panelId}, #${btnId}, .${unlockBtnClass}`)) {
     return
   }
   event.stopImmediatePropagation()
@@ -145,6 +148,34 @@ function isolateEvents(element: HTMLElement) {
   for (const type of swallowedEvents) {
     element.addEventListener(type, (event) => event.stopPropagation())
   }
+}
+
+// A tap has to be taken from touchend, not from click. Chromium only synthesises
+// the click if nothing cancelled the touch sequence, and YouTube's mobile player
+// cancels it from a capture-phase document listener, which runs before anything
+// we can attach to our own element. The lock overlay never hit this because
+// blockEvent is already swallowing the sequence by the time it is up.
+// preventDefault on touchend also stops the compat mouse events, so click only
+// ever fires here for a real mouse or the keyboard.
+function onTap(element: HTMLElement, handler: () => void) {
+  // A click right after a touch we handled is the compat one; a second real tap
+  // brings its own touchend, so the flag never swallows one.
+  let fromTouch = false
+  const run = (event: Event) => {
+    if (event.type === 'touchend') {
+      fromTouch = true
+      setTimeout(() => (fromTouch = false), 700)
+    } else if (fromTouch) {
+      return
+    }
+    event.stopPropagation()
+    if (event.cancelable) {
+      event.preventDefault()
+    }
+    handler()
+  }
+  element.addEventListener('touchend', run)
+  element.addEventListener('click', run)
 }
 
 function setEventBlocking(blocked: boolean) {
@@ -181,7 +212,7 @@ function lockScreen() {
     <button type="button" class="${unlockBtnClass}" aria-label="Unlock">${iconLockOpen}</button>
   `)
   const unlockBtn = overlay.querySelector<HTMLButtonElement>(`.${unlockBtnClass}`)!
-  unlockBtn.addEventListener('click', () => unlockScreen())
+  onTap(unlockBtn, () => unlockScreen())
   isolateEvents(unlockBtn)
 
   host.append(overlay)
@@ -453,39 +484,38 @@ function renderPanelContent(panel: HTMLElement) {
       : ''}
   `)
 
-  panel.querySelector<HTMLButtonElement>('#_nou_fs_lock')?.addEventListener('click', () => {
-    closePanel()
-    lockScreen()
-  })
+  const lockBtn = panel.querySelector<HTMLButtonElement>('#_nou_fs_lock')
+  if (lockBtn) {
+    onTap(lockBtn, () => {
+      closePanel()
+      lockScreen()
+    })
+  }
 
-  panel.querySelector<HTMLButtonElement>('#_nou_fs_side')!.addEventListener('click', () => toggleSide())
+  onTap(panel.querySelector<HTMLButtonElement>('#_nou_fs_side')!, () => toggleSide())
 
-  panel.addEventListener('click', (event) => {
-    const target = event.target
-    if (!(target instanceof Element)) {
-      return
-    }
-    const button = target.closest<HTMLElement>(`.${chipClass}`)
-    if (!button) {
-      return
-    }
-    const { group, value } = button.dataset
-    if (group === 'rate') {
-      getPlayer()?.setPlaybackRate?.(Number(value))
-    } else if (group === 'quality') {
-      const player = getPlayer()
-      if (player?.setPlaybackQualityRange) {
-        player.setPlaybackQualityRange(value, value)
+  // Bound per chip rather than delegated on the panel: onTap cancels the touch
+  // sequence it handles, and the sliders in here need theirs left alone.
+  for (const button of panel.querySelectorAll<HTMLElement>(`.${chipClass}`)) {
+    onTap(button, () => {
+      const { group, value } = button.dataset
+      if (group === 'rate') {
+        getPlayer()?.setPlaybackRate?.(Number(value))
+      } else if (group === 'quality') {
+        const player = getPlayer()
+        if (player?.setPlaybackQualityRange) {
+          player.setPlaybackQualityRange(value, value)
+        } else {
+          player?.setPlaybackQuality?.(value)
+        }
       } else {
-        player?.setPlaybackQuality?.(value)
+        return
       }
-    } else {
-      return
-    }
-    for (const sibling of button.parentElement!.querySelectorAll(`.${chipClass}`)) {
-      sibling.classList.toggle(activeClass, sibling === button)
-    }
-  })
+      for (const sibling of button.parentElement!.querySelectorAll(`.${chipClass}`)) {
+        sibling.classList.toggle(activeClass, sibling === button)
+      }
+    })
+  }
 
   const volumeInput = panel.querySelector<HTMLInputElement>('#_nou_fs_volume')
   const volumeValue = panel.querySelector<HTMLElement>('#_nou_fs_volume_value')
@@ -583,7 +613,7 @@ function renderControlsButton() {
   btn.setAttribute('aria-label', 'Player controls')
   btn.innerHTML = nouPolicy.createHTML(iconTune)
   applySide(btn)
-  btn.onclick = () => openPanel()
+  onTap(btn, () => openPanel())
   isolateEvents(btn)
   if (isWebPlayer()) {
     btn.addEventListener('mouseenter', () => syncButtonVisibility())
