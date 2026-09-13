@@ -2,7 +2,6 @@ import { ObservableHint } from '@legendapp/state'
 import { ui$ } from '@/states/ui'
 import { settings$ } from '@/states/settings'
 import { isAndroid } from './utils'
-import { isWatchUrl } from './split-watch-url'
 import { retryNativeViewCall } from './native-view-call'
 
 export { isWatchUrl } from './split-watch-url'
@@ -32,6 +31,18 @@ let playerLoadToken = 0
 
 export function isSplitWatchEnabled() {
   return isAndroid && settings$.miniPlayer.get()
+}
+
+/* A page with YouTube's router live in it, which is every page of the site --
+ * not just /watch. */
+const YOUTUBE_HOSTS = ['m.youtube.com', 'www.youtube.com', 'youtube.com', 'music.youtube.com']
+
+function isRoutableYoutubePage(url: string) {
+  try {
+    return YOUTUBE_HOSTS.includes(new URL(url).host)
+  } catch {
+    return false
+  }
 }
 
 export function isShortsUrl(url: string) {
@@ -175,11 +186,13 @@ function loadIntoPlayer(url: string) {
     pendingPlayerUrl = url
     return
   }
-  // A player already sitting on a watch page has YouTube's router live in it,
-  // and letting the router do the navigation is far cheaper than loading the
-  // watch page as a fresh document -- the same trick the site itself uses when
-  // you tap a video in the feed.
-  if (isWatchUrl(ui$.playerPageUrl.get())) {
+  // A player already sitting on a YouTube page has the router live in it, and
+  // letting the router do the navigation is far cheaper than loading the watch
+  // page as a fresh document -- the same trick the site itself uses when you
+  // tap a video in the feed. Any page of the site will do, not only another
+  // /watch: navigateWatch hands the url to the router as a link click, which is
+  // exactly what the feed does.
+  if (isRoutableYoutubePage(ui$.playerPageUrl.get())) {
     try {
       // The page answers with a sentinel: without one, a player that has not
       // installed window.NouTube yet -- still loading, a recovered renderer, an
