@@ -1,0 +1,3 @@
+- Fix taps on the fullscreen captions and settings buttons
+- Keep picture-in-picture working when the next video starts
+- Leave the player on auto when the saved quality is not offered
