@@ -1,0 +1,3 @@
+- Block the ads on a watch page opened from a link or restored on startup
+- Open the video a shared link points at, not the last one watched
+- Stop fullscreen turning the screen brightness up
