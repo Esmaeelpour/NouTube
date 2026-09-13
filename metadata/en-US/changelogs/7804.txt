@@ -1,0 +1,5 @@
+- Fix the fullscreen controls button not responding to taps
+- Enter picture-in-picture on back instead of on the way out of the app
+- Keep picture-in-picture armed after the activity is recreated
+- Recover background playback that stalls instead of giving up on it
+- Open videos through YouTube's router from any page of the site
