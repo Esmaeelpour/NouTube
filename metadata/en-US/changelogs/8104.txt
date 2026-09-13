@@ -1,0 +1,4 @@
+- Add brightness and volume gestures, and swipe down to the mini player
+- Stop the same video opening in both halves of the split watch view
+- Keep the floating window one shape when playback pauses
+- Stop the app icon flashing before the video in the floating window
