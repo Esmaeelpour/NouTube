@@ -14,6 +14,7 @@ import { installCommentTranslateButtons } from './translate'
 import { interceptClipboard } from './clipboard'
 import { installWatchNavigation } from './watch-nav'
 import { installFullscreenControls } from './fullscreen-controls'
+import { installPlayerGestures } from './player-gestures'
 import { installSystemCaptionStyle } from './captions'
 import { installEncodedAuthorNameFix } from './author-names'
 import { installBackgroundGuard } from './background-guard'
@@ -84,6 +85,7 @@ async function initObserver() {
   installDislikeCount()
   installDoubleTapGestures()
   installFullscreenControls()
+  installPlayerGestures()
   installCommentTranslateButtons()
   installEncodedAuthorNameFix()
   if (window.isAndroid) {

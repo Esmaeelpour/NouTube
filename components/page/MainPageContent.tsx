@@ -44,6 +44,7 @@ import { SettingsModal } from '../modal/SettingsModal'
 import { PlayerFrame } from './PlayerFrame'
 import {
   closePlayer,
+  hidePlayer,
   isSplitWatchEnabled,
   isWatchUrl,
   openInPlayer,
@@ -610,6 +611,13 @@ export const MainPageContent: React.FC<{ contentJs: string }> = ({ contentJs }) 
           if (isAndroid && doubleTapToToggleHeader) {
             ui$.headerShown.set(!ui$.headerShown.get())
           }
+          break
+        case 'minimize-player':
+          // Swipe down on the player, the way the YouTube app does it. Only the
+          // split watch view has somewhere to put the video; without it there
+          // is no mini player to drop into and the gesture does nothing.
+          if (!isForeground) break
+          hidePlayer()
           break
         case 'translate-block':
           if (!isWeb && translateComments && translationTargetLanguage && typeof data?.text === 'string') {

@@ -255,6 +255,44 @@ function linearToGamma(linear: number) {
   return Math.min(Math.max(gamma, 0), 1)
 }
 
+/* Brightness and volume as the gestures need them: a current value and a way
+ * to set one, with the storage and the platform differences already handled
+ * here (see content/player-gestures.ts). */
+export function getBrightnessPercent() {
+  return getCurrentBrightness()
+}
+
+export function setBrightnessPercent(percent: number) {
+  const clamped = Math.min(100, Math.max(1, Math.round(percent)))
+  localStorage.setItem(brightnessKey, String(clamped))
+  applyBrightness(clamped)
+  return clamped
+}
+
+/* The volume this platform can actually offer, as 0..100 percent, or nothing
+ * when it offers none. */
+export function getVolumePercent() {
+  const volume = getVolumeControl()
+  return volume ? Math.round((volume.value / volume.max) * 100) : undefined
+}
+
+export function setVolumePercent(percent: number) {
+  const volume = getVolumeControl()
+  if (!volume) {
+    return undefined
+  }
+  const clamped = Math.min(100, Math.max(0, Math.round(percent)))
+  const value = Math.round((clamped / 100) * volume.max)
+  if (volume.native) {
+    window.NouTubeI?.setVolumeIndex?.(bridgeToken(), value)
+  } else {
+    setWebVolume(value)
+  }
+  return clamped
+}
+
+export const isFullscreen = () => Boolean(getFullscreenElement())
+
 function applyBrightness(percent: number) {
   // The native side takes 0..1, with -1 meaning "hand control back to Android".
   window.NouTubeI?.setBrightness?.(bridgeToken(), percent >= 100 ? -1 : gammaToLinear(percent / 100))
