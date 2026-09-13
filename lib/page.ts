@@ -4,7 +4,6 @@ import { settings$ } from '@/states/settings'
 import { debounce } from 'es-toolkit'
 import { isSupportedUrl, normalizeSupportedUrl } from './supported-url'
 import { removeTrackingParams } from './tracking-url'
-import { isSplitWatchEnabled, isWatchUrl, openInPlayer } from './split-view'
 
 export { getPageType } from './page-type'
 
@@ -44,16 +43,13 @@ export function openSharedUrl(url: string) {
     if (!isSupportedUrl(fixed)) {
       return
     }
-    const normalized = normalizeSupportedUrl(fixed)
-    // A video belongs in the player half wherever it came from -- a share, a
-    // deep link, another app. updateUrl loads it into the browsing webview,
-    // which in the split watch view leaves the same video open in both halves
-    // at once, with the player still holding whatever it had.
-    if (isSplitWatchEnabled() && isWatchUrl(normalized)) {
-      openInPlayer(normalized)
-      return
-    }
-    updateUrl(normalized)
+    // A video ought to go to the player half in the split watch view, and
+    // openInPlayer is how the app does that everywhere else -- but a deep link
+    // at cold start reaches this before the player webview exists, and the
+    // queued load never lands: the player opens blank. Until that path is
+    // understood, the browsing webview takes it and plays it, which is wrong
+    // but not broken.
+    updateUrl(normalizeSupportedUrl(fixed))
   } catch (error) {
     console.error(error)
   }
