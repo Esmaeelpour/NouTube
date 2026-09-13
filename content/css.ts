@@ -74,46 +74,6 @@ const cssContentMobile = css`
     pointer-events: auto !important;
   }
 
-  /* The readout the brightness and volume gestures put on screen, in the shape
-     the phone's own overlays use: an icon, a bar and a number, gone as soon as
-     the finger stops. */
-  #_nou_gesture_hud {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    z-index: 2147483647;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    transform: translate(-50%, -50%);
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.75);
-    color: white;
-    font-size: 13px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s;
-  }
-
-  #_nou_gesture_hud.show {
-    opacity: 1;
-  }
-
-  #_nou_gesture_hud ._nou_gesture_track {
-    width: 120px;
-    height: 4px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.3);
-  }
-
-  #_nou_gesture_hud ._nou_gesture_fill {
-    height: 100%;
-    border-radius: 999px;
-    background: white;
-  }
-
   #_nou_fullscreen_title {
     display: none;
   }
