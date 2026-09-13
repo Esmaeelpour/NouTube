@@ -3,7 +3,7 @@ import { ui$ } from '@/states/ui'
 import { settings$ } from '@/states/settings'
 import { isAndroid } from './utils'
 import { retryNativeViewCall } from './native-view-call'
-import { isRoutableYoutubePage } from './split-watch-url'
+import { isRoutableYoutubePage, isWatchUrl } from './split-watch-url'
 
 export { isWatchUrl } from './split-watch-url'
 
@@ -135,10 +135,37 @@ export function openInBrowse(url: string) {
  * (see retryNativeViewCall) and abandoned once a newer load, a teardown or a
  * replaced webview has made it stale. */
 function loadPlayerUrl(webview: any, url: string, token: number) {
-  retryNativeViewCall(
-    () => webview.loadUrl?.(url),
-    () => token !== playerLoadToken || playerWebview !== webview,
-  )
+  const stale = () => token !== playerLoadToken || playerWebview !== webview
+  retryNativeViewCall(() => webview.loadUrl?.(url), stale)
+  scheduleLoadCheck(webview, url, token)
+}
+
+// How long to give a load before asking again, and again.
+const LOAD_CHECK_MS = [1500, 4000, 9000]
+
+/* A load can be accepted and still never land -- a video asked for before the
+ * app has finished starting is the case that bites, where the webview exists
+ * but is not ready for it yet. Nothing else would ever notice: the player
+ * webview has no src of its own, so it would sit blank behind a video the app
+ * believes it is playing, which is exactly what a shared link used to do. Check
+ * back, and ask again if no page arrived. */
+function scheduleLoadCheck(webview: any, url: string, token: number) {
+  for (const delay of LOAD_CHECK_MS) {
+    setTimeout(() => {
+      if (token !== playerLoadToken || playerWebview !== webview) {
+        return
+      }
+      // setSplitPageUrl ignores about:blank, so an empty player reads as one
+      // that never loaded.
+      if (isWatchUrl(ui$.playerPageUrl.peek())) {
+        return
+      }
+      retryNativeViewCall(
+        () => webview.loadUrl?.(url),
+        () => token !== playerLoadToken || playerWebview !== webview,
+      )
+    }, delay)
+  }
 }
 
 /* Tear the video down for good. The webview itself stays for the next one --
