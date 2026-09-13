@@ -75,10 +75,17 @@ function showHud(kind: Axis, percent: number) {
 const inPlayer = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('#movie_player, #player-container-id'))
 
-/* The progress bar and the buttons keep their own drags. */
+/* The progress bar and the buttons keep their own drags, and so do our own
+ * overlays -- a drag across the fullscreen control panel is aimed at the panel,
+ * not at the brightness behind it. */
 const onControl = (target: EventTarget | null) =>
   target instanceof Element &&
-  Boolean(target.closest('input, button, a, [role="button"], [role="slider"], .ytPlayerProgressBarHost, .ytp-progress-bar-container'))
+  Boolean(
+    target.closest(
+      'input, button, a, [role="button"], [role="slider"], .ytPlayerProgressBarHost, .ytp-progress-bar-container,' +
+        '#_nou_fs_panel, #_nou_fs_btn, #_nou_fs_scrim, #_nou_lock_overlay, #_nou_gesture_hud',
+    ),
+  )
 
 export function installPlayerGestures() {
   if (!window.isAndroid) {
