@@ -23,6 +23,8 @@ import { emit, nouPolicy } from './utils'
 
 const hudId = '_nou_gesture_hud'
 const CLAIM_PX = 24
+// Lower, because this one has to beat the page's own scrolling to the touch.
+const MINIMIZE_CLAIM_PX = 16
 // The travel that takes a value from nothing to everything: a little over half
 // the screen, which is what the phone's own volume gesture feels like.
 const FULL_TRAVEL_RATIO = 0.6
@@ -118,7 +120,7 @@ export function installPlayerGestures() {
         axis = 'minimize'
       }
     },
-    { passive: true, capture: true },
+    { passive: false, capture: true },
   )
 
   document.addEventListener(
@@ -130,6 +132,23 @@ export function installPlayerGestures() {
       const touch = event.touches[0]
       const dx = touch.clientX - startX
       const dy = touch.clientY - startY
+      if (axis === 'minimize') {
+        // Upwards is the page scrolling and sideways is YouTube seeking; only
+        // downwards is ours.
+        if (dy < 0 || Math.abs(dx) > Math.abs(dy)) {
+          axis = undefined
+          return
+        }
+        // Claimed from the first millimetre rather than after a threshold: the
+        // page scrolls the moment the browser decides the touch is a scroll,
+        // and once it has, the touch is cancelled and never comes back. A drag
+        // down the player is never a scroll here, the same as in the app.
+        event.preventDefault()
+        if (dy >= MINIMIZE_CLAIM_PX) {
+          claimed = true
+        }
+        return
+      }
       if (!claimed) {
         // Vertical, and clearly so: anything else belongs to the page.
         if (Math.abs(dy) < CLAIM_PX || Math.abs(dy) < Math.abs(dx) * 1.5) {
@@ -138,17 +157,7 @@ export function installPlayerGestures() {
           }
           return
         }
-        if (axis === 'minimize' && dy < 0) {
-          // Only downwards minimises; an upward drag is the page scrolling.
-          axis = undefined
-          return
-        }
         claimed = true
-      }
-      if (axis === 'minimize') {
-        // Held until the finger lifts, so a change of mind can still scroll.
-        event.preventDefault()
-        return
       }
       // Up is more, and the travel is measured from where the finger went down.
       const travel = window.innerHeight * FULL_TRAVEL_RATIO
