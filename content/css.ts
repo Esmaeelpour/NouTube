@@ -16,13 +16,20 @@ const cssContentMobile = css`
    * The player is excluded: its own class list carries title-related flags
    * (ytp-hide-fullscreen-title), and forcing height:auto on #movie_player
    * collapses it to 0, clipping the video away.
+   *
+   * So is the control overlay, which is a sibling of #movie_player rather than
+   * a descendant and so was not covered by that: the fullscreen title box in
+   * there matches [class*='title'], and without its height clamp it grows to
+   * fit the whole title and spreads over the captions and settings buttons
+   * beside it, swallowing their taps. Nothing in the controls is zoomed text
+   * that needs the clamp lifted anyway.
    */
   :is(
       [class*='headline' i],
       [class*='title' i],
       [class*='subhead' i],
       [class*='channel-name' i]
-    ):not(#movie_player, #movie_player *) {
+    ):not(#movie_player, #movie_player *, #player-control-overlay, #player-control-overlay *) {
     height: auto !important;
     max-height: none !important;
   }
