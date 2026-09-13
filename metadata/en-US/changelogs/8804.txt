@@ -1,0 +1,1 @@
+- Stop background playback stopping and starting on its own while the screen is off
