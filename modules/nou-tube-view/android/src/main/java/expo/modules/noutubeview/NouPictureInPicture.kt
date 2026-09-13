@@ -3,7 +3,9 @@ package expo.modules.noutubeview
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.util.Log
 import android.util.Rational
@@ -31,7 +33,13 @@ object NouPictureInPicture {
   private const val MAX_ASPECT_RATIO = 2.39
 
   private var view: NouTubeView? = null
+  // What is playing, or null once there is nothing to pin. Arming reads this.
   private var videoSize: Pair<Int, Int>? = null
+  // The shape of the last video there was, which outlives the pause that
+  // disarmed it: pausing must not change the aspect ratio, or the pinned window
+  // resizes itself every time playback stops and starts again.
+  private var lastVideoSize: Pair<Int, Int>? = null
+  private var windowPainted = false
   private var active = false
   private var chromeHidden = false
   private val hiddenViews = mutableSetOf<View>()
@@ -93,6 +101,7 @@ object NouPictureInPicture {
     }
     if (size != null) {
       this.view = view
+      lastVideoSize = size
     }
     if (size == videoSize) {
       return
@@ -121,8 +130,10 @@ object NouPictureInPicture {
       return
     }
     releaseWindow()
+    view.currentActivity?.let { paintWindowBehindVideo(it, false) }
     this.view = null
     videoSize = null
+    lastVideoSize = null
     sourceRect = null
   }
 
@@ -133,10 +144,32 @@ object NouPictureInPicture {
     if (!autoEnterSupported || !isSupported(activity)) {
       return
     }
+    // The shape comes from the last video there was, the arming from whether one
+    // is playing now: a pause disarms auto-enter without reshaping the window.
     try {
-      activity.setPictureInPictureParams(paramsFor(videoSize ?: (16 to 9), videoSize != null))
+      activity.setPictureInPictureParams(paramsFor(lastVideoSize ?: (16 to 9), videoSize != null))
     } catch (error: Exception) {
       Log.w(TAG, "Unable to update picture-in-picture params", error)
+    }
+    paintWindowBehindVideo(activity, videoSize != null)
+  }
+
+  // The window's own background is the launch drawable -- the app icon on a
+  // colour -- and it is what the pinned window shows until the webview has
+  // drawn a frame at its new size: the flash of the icon before the video
+  // appears. Black is what a video letterboxes into, so the gap stops showing.
+  // Painted while there is something to pin, because auto-enter gives no
+  // warning, and put back afterwards so the launch screen is untouched.
+  private fun paintWindowBehindVideo(activity: Activity, black: Boolean) {
+    if (black == windowPainted) {
+      return
+    }
+    val window = activity.window ?: return
+    try {
+      window.setBackgroundDrawable(if (black) ColorDrawable(Color.BLACK) else null)
+      windowPainted = black
+    } catch (error: Exception) {
+      Log.w(TAG, "Unable to set the window background", error)
     }
   }
 
