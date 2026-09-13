@@ -8,12 +8,12 @@ import {
 
 const keys = ['adBreakHeartbeatParams', 'adPlacements', 'adSlots', 'playerAds']
 
-/* Anchored at the end on purpose: /youtubei/v1/player/heartbeat is not the
+/* Everything under these endpoints except the heartbeat: that one is not the
  * player response, it is how the page tells YouTube the video is still being
- * watched and how far in. Rebuilding that through the player transform put the
+ * watched and how far in. Rebuilding it through the player transform put the
  * progress other devices resume from through a parser meant for something
- * else. */
-export const RE_INTERCEPT = new RegExp('^/youtubei/v1/(browse|get_watch|next|player|search)$')
+ * else. The rest of the sub-paths are left matching as they always were. */
+export const RE_INTERCEPT = new RegExp('^/youtubei/v1/(browse|get_watch|next|player|search)(?!/heartbeat)')
 
 interface TransformOptions {
   hideShorts?: boolean
@@ -40,14 +40,24 @@ function stripAdKeys(data: any) {
   return data
 }
 
-export function transformPlayerResponse(text: string, _blocklist?: BlocklistSnapshot, options: TransformOptions = {}) {
-  const data = JSON.parse(text)
+/* The player response as an object, for the copy the server renders into the
+ * page. A watch page opened as a fresh document -- a deep link, the restored
+ * video, the first video of a session in the split view -- never fetches one,
+ * so without this its ads are the only ones that still get through. */
+export function filterPlayerResponse(data: any, options: TransformOptions = {}) {
+  if (!data || typeof data !== 'object') {
+    return data
+  }
   if (blocksAds(options)) {
     stripAdKeys(data)
   }
   applyPlayerResponseOriginalTitle(data, options)
   rewriteOriginalTitles(data, options)
-  return JSON.stringify(data)
+  return data
+}
+
+export function transformPlayerResponse(text: string, _blocklist?: BlocklistSnapshot, options: TransformOptions = {}) {
+  return JSON.stringify(filterPlayerResponse(JSON.parse(text), options))
 }
 
 export function transformSearchResponse(text: string, blocklist?: BlocklistSnapshot, options: TransformOptions = {}) {

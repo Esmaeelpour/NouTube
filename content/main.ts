@@ -15,6 +15,7 @@ import { interceptClipboard } from './clipboard'
 import { installWatchNavigation } from './watch-nav'
 import { installFullscreenControls } from './fullscreen-controls'
 import { installPlayerGestures } from './player-gestures'
+import { installFullscreenProbe } from './fullscreen-probe'
 import { installSystemCaptionStyle } from './captions'
 import { installEncodedAuthorNameFix } from './author-names'
 import { installBackgroundGuard } from './background-guard'
@@ -87,6 +88,7 @@ async function initObserver() {
   installDoubleTapGestures()
   installFullscreenControls()
   installPlayerGestures()
+  installFullscreenProbe()
   installCommentTranslateButtons()
   installEncodedAuthorNameFix()
   if (window.isAndroid) {

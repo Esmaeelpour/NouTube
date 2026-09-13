@@ -82,8 +82,19 @@ jobs:
           rename 's/release-unsigned-signed/release/' *.apk
         working-directory: android/app/build/outputs/apk/full/release
 
+      # A dispatched build has no tag to release to: keep the apk as an
+      # artifact instead, so a test build can be installed without publishing
+      # a release for it.
+      - uses: actions/upload-artifact@v4
+        name: keep apk
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        with:
+          name: apk
+          path: android/app/build/outputs/apk/full/release/*-release.apk
+
       - uses: softprops/action-gh-release@v2
         name: upload apk
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           body_path: metadata/en-US/changelogs/${{ env.VERSION_CODE }}04.txt
           files: android/app/build/outputs/apk/full/release/*-release.apk
