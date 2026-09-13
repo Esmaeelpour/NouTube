@@ -316,6 +316,13 @@ class NouTubeViewModule : Module() {
         }
       }
 
+      // Answers false when there is nothing to pin -- Picture-in-Picture turned
+      // off, no video playing, the system refusing it -- so the caller can fall
+      // back to whatever it would have done instead.
+      AsyncFunction("enterPictureInPicture") { view: NouTubeView ->
+        NouPictureInPicture.enterNow(view)
+      }
+
       AsyncFunction("loadUrl") { view: NouTubeView, url: String ->
         view.webView.loadUrl(url)
       }

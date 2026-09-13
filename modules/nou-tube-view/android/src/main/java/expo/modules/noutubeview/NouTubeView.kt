@@ -617,6 +617,13 @@ class NouTubeView(context: Context, appContext: AppContext) : ExpoView(context, 
     swipeRefreshLayout.addView(webView)
     addView(swipeRefreshLayout)
 
+    // Keeps the Picture-in-Picture source rect on the video as the layout moves
+    // it around (see NouPictureInPicture.onViewLayout). A listener rather than
+    // an onLayout override: React Native owns this view's layout pass.
+    addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+      NouPictureInPicture.onViewLayout(this)
+    }
+
     initService()
 
     val activity = currentActivity

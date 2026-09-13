@@ -4,6 +4,7 @@ import { useObserveEffect } from '@legendapp/state/react'
 import { ui$ } from '@/states/ui'
 import { handleSplitBack } from '@/lib/split-view'
 import { openSharedUrl } from '@/lib/page'
+import { enterPictureInPicture } from '@/lib/picture-in-picture'
 import { Asset } from 'expo-asset'
 import { useIncomingShare } from 'expo-sharing'
 import { parseSharedUrl } from '@/lib/share-intent'
@@ -120,14 +121,28 @@ export default function HomeScreen() {
       sleepTimer$.clear()
     }
 
-    const backSubscription = BackHandler.addEventListener('hardwareBackPress', function () {
+    const goBack = () => {
       // Back out of the split watch view first: it always returns to the
       // browsing webview instead of stepping back through videos.
       if (handleSplitBack()) {
-        return true
+        return
       }
-      const webview = ui$.webview.get()
-      webview?.goBack()
+      ui$.webview.get()?.goBack()
+    }
+
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', function () {
+      // With Picture-in-Picture armed, back means "keep watching in a floating
+      // window". Asking for it here rather than letting the activity pause into
+      // it on the way out is what keeps the transition on the video: navigating
+      // first is how the pinned window used to end up showing the page behind
+      // it. The answer only comes back once the system has refused (nothing
+      // playing, PiP off, or turned off for the app), so the normal back is not
+      // lost, only deferred to that point.
+      void enterPictureInPicture().then((entered) => {
+        if (!entered) {
+          goBack()
+        }
+      })
       return true
     })
 

@@ -38,6 +38,9 @@ object NouPictureInPicture {
   // The webview and every ancestor it is clipped by, with the bounds React
   // Native last gave them.
   private val stretchedViews = mutableListOf<Pair<View, Rect>>()
+  // The last source rect handed to the system, so a layout that did not move
+  // the video does not turn into a binder call.
+  private var sourceRect: Rect? = null
   private var decorView: View? = null
   private val decorLayoutListener =
     View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fillWindow() }
@@ -98,6 +101,21 @@ object NouPictureInPicture {
     updateParams(view.currentActivity ?: return)
   }
 
+  // The auto-enter transition animates out of the source rect the params were
+  // last given, so a video that has moved since -- the split watch view opening,
+  // a rotation, the mini player -- would fly out of the wrong place. Follow it.
+  fun onViewLayout(view: NouTubeView) {
+    if (this.view !== view || videoSize == null || active) {
+      return
+    }
+    val rect = Rect()
+    if (!view.getGlobalVisibleRect(rect) || rect.isEmpty || rect == sourceRect) {
+      return
+    }
+    sourceRect = rect
+    updateParams(view.currentActivity ?: return)
+  }
+
   fun onViewDetached(view: NouTubeView) {
     if (this.view !== view) {
       return
@@ -105,6 +123,7 @@ object NouPictureInPicture {
     releaseWindow()
     this.view = null
     videoSize = null
+    sourceRect = null
   }
 
   // On Android 12+ the system enters PiP itself on the home gesture, which
@@ -155,6 +174,43 @@ object NouPictureInPicture {
     }
   }
 
+  // Entering on a deliberate user action rather than on the way out of the app.
+  // Everything onUserLeaveHint has to guess at is known here: the video is the
+  // one on screen, the source rect is current, and the page is shrunk before
+  // the window is, so the pinned window never shows a frame of the app chrome
+  // or of a page the webview was about to navigate to.
+  fun enterNow(view: NouTubeView): Boolean {
+    val activity = view.currentActivity ?: return false
+    if (!isSupported(activity) || activity.isInPictureInPictureMode) {
+      return false
+    }
+    // Only the view that reported the video can pin it; the other webview of
+    // the split watch view would pin its own page.
+    if (this.view !== view) {
+      return false
+    }
+    val size = videoSize ?: return false
+    setChromeHidden(true)
+    // YouTube reads the outer window size to detect backgrounding, so the page
+    // has to be patched before the window shrinks.
+    view.webView.evaluateJavascript("window.NouTube?.preparePictureInPicture?.()", null)
+    val entered = try {
+      // autoEnter stays on the params: the user can still leave the app from
+      // the pinned window later, and dropping it here would disarm the home
+      // gesture until the next video change.
+      activity.enterPictureInPictureMode(paramsFor(size, autoEnterSupported))
+    } catch (error: Exception) {
+      Log.w(TAG, "Unable to enter picture-in-picture", error)
+      false
+    }
+    // The caller falls back to a normal back press, so the chrome it lands on
+    // has to be there.
+    if (!entered) {
+      setChromeHidden(false)
+    }
+    return entered
+  }
+
   // Leaving the app does not always end in PiP -- it can be turned off for the
   // app in system settings, or playback stopped on the way out -- so the chrome
   // comes back for whatever the user returns to (NouTubeView drives this off
@@ -164,6 +220,11 @@ object NouPictureInPicture {
       return
     }
     setChromeHidden(false)
+    // Params do not survive an activity the system recreated -- a rotation, a
+    // theme change -- and the page only re-reports the video when it changes,
+    // so auto-enter would stay disarmed for the rest of the playback. Arm it
+    // again for whatever is playing now.
+    view?.currentActivity?.let { updateParams(it) }
   }
 
   fun onModeChanged(activity: Activity, inPictureInPicture: Boolean) {

@@ -5,6 +5,9 @@ declare class NouTubeViewModule extends NativeModule {
   executeJavaScriptAsync(script: string): Promise<string>
   loadUrl(url: string): void
   goBack(): Promise<void>
+  /* Pin the video this view is playing to a floating window, answering false
+   * when there is nothing to pin (see NouPictureInPicture.enterNow). */
+  enterPictureInPicture(): Promise<boolean>
   /* Point the media notification and the system media controls at this view.
    * Only meaningful with more than one view alive (see lib/split-view.ts). */
   claimMediaSession(): Promise<void>
