@@ -1,0 +1,1 @@
+- Open shared and linked videos in the player, and make sure they load
