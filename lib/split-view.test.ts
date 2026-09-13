@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import { ui$ } from '@/states/ui'
 import { settings$ } from '@/states/settings'
 import {
+  FLUSH_MS,
   closePlayer,
   handleSplitBack,
   hidePlayer,
@@ -167,11 +168,16 @@ describe('openInPlayer', () => {
     expect(player.loaded).toEqual(['https://m.youtube.com/watch?v=early12345'])
   })
 
-  it('empties the kept-warm webview when the video is closed', () => {
+  it('empties the kept-warm webview when the video is closed', async () => {
     const player = fakePlayer()
     setPlayerWebview(player)
     openInPlayer('https://m.youtube.com/watch?v=abc123')
     closePlayer()
+    // The page is given a moment to report where the video was left before
+    // the document it would report from is thrown away.
+    expect(player.scripts.at(-1)).toContain('pagehide')
+    expect(player.loaded.at(-1)).not.toBe('about:blank')
+    await new Promise((resolve) => setTimeout(resolve, FLUSH_MS + 100))
     expect(player.loaded.at(-1)).toBe('about:blank')
   })
 })

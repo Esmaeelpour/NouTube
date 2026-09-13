@@ -208,7 +208,7 @@ function flushWatchProgress(webview: any) {
 
 // Long enough for the ping to leave, short enough not to be heard as the video
 // carrying on after it was closed.
-const FLUSH_MS = 400
+export const FLUSH_MS = 400
 
 export function pausePlayer() {
   try {
