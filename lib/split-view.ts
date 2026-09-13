@@ -3,6 +3,7 @@ import { ui$ } from '@/states/ui'
 import { settings$ } from '@/states/settings'
 import { isAndroid } from './utils'
 import { retryNativeViewCall } from './native-view-call'
+import { isRoutableYoutubePage } from './split-watch-url'
 
 export { isWatchUrl } from './split-watch-url'
 
@@ -31,18 +32,6 @@ let playerLoadToken = 0
 
 export function isSplitWatchEnabled() {
   return isAndroid && settings$.miniPlayer.get()
-}
-
-/* A page with YouTube's router live in it, which is every page of the site --
- * not just /watch. */
-const YOUTUBE_HOSTS = ['m.youtube.com', 'www.youtube.com', 'youtube.com', 'music.youtube.com']
-
-function isRoutableYoutubePage(url: string) {
-  try {
-    return YOUTUBE_HOSTS.includes(new URL(url).host)
-  } catch {
-    return false
-  }
 }
 
 export function isShortsUrl(url: string) {

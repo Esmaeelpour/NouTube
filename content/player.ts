@@ -144,8 +144,11 @@ function applySavedPlaybackQuality(player: any) {
     if (playbackQuality === 'auto') {
       return
     }
-    if (Array.isArray(availableQualities) && !availableQualities.includes(playbackQuality)) {
-      // Let player fall back natively
+    // Pinning a level this video does not have leaves the player with a range it
+    // cannot satisfy, which it answers with rebuffering rather than with the
+    // next best thing. Leave it on auto instead and let it choose.
+    if (Array.isArray(availableQualities) && availableQualities.length && !availableQualities.includes(playbackQuality)) {
+      return
     }
     if (player.setPlaybackQualityRange) {
       player.setPlaybackQualityRange(playbackQuality, playbackQuality)
