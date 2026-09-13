@@ -1,3 +1,5 @@
+import { settleViewportLayout } from './utils'
+
 const styleId = '_nou_pip'
 const ancestorClass = '_nou_pip_ancestor'
 let transition = 0
@@ -11,8 +13,25 @@ let remarkTimer: ReturnType<typeof setTimeout> | undefined
 // new document, so the style survives it while the marks do not: the new
 // player would be built inside a display:none ancestor, where it neither
 // renders nor starts. Re-mark whatever the page is playing now instead.
+// The page's own player, not whatever <video> happens to come first in the
+// document. A watch page carries more than one: the related videos and the
+// feed underneath bring their own preview elements, and picking one of those
+// is how a floating window ends up playing a video the user was not watching,
+// with the real player hidden behind the marks it never got.
+function getPlayerVideo(): HTMLVideoElement | null {
+  const inPlayer = document.querySelector('#movie_player video')
+  if (inPlayer instanceof HTMLVideoElement && inPlayer.videoWidth > 0) {
+    return inPlayer
+  }
+  const videos = Array.from(document.querySelectorAll('video')).filter(
+    (video): video is HTMLVideoElement => video instanceof HTMLVideoElement && video.videoWidth > 0,
+  )
+  // Failing that, the one actually playing, and failing that the first real one.
+  return videos.find((video) => !video.paused) ?? videos[0] ?? null
+}
+
 function markVideoAncestors() {
-  const video = document.querySelector('video')
+  const video = getPlayerVideo()
   const wanted = new Set<Element>()
   for (let parent = video?.parentElement; parent; parent = parent.parentElement) {
     wanted.add(parent)
@@ -72,7 +91,7 @@ export function preparePictureInPicture() {
 export async function setPictureInPicture(active: boolean) {
   const currentTransition = ++transition
   if (!active) {
-    const wasPlaying = !document.querySelector('video')?.paused
+    const wasPlaying = !getPlayerVideo()?.paused
     window.NouTubePip = false
     unwatchVideoAncestors()
     document.getElementById(styleId)?.remove()
@@ -86,7 +105,9 @@ export async function setPictureInPicture(active: boolean) {
       else Reflect.deleteProperty(window, key)
     }
     outerDimensions = undefined
-    window.dispatchEvent(new Event('resize'))
+    // The window is still growing back out of the floating one, so the player
+    // has to be told more than once (see settleViewportLayout).
+    settleViewportLayout()
     if (wasPlaying) window.NouTube.play()
     return
   }
@@ -123,7 +144,7 @@ export async function setPictureInPicture(active: boolean) {
     }
   `
   document.head.appendChild(style)
-  window.dispatchEvent(new Event('resize'))
+  settleViewportLayout()
   window.NouTube.play()
 }
 
@@ -148,10 +169,21 @@ function isPictureInPictureEnabled(): boolean {
 // arrives), so hand it the video it would show ahead of time instead. A zero
 // size means there is nothing to show and PiP stays disarmed.
 function reportPictureInPictureVideo() {
-  const video = document.querySelector('video')
+  const video = getPlayerVideo()
   const onVideoPage = !!document.fullscreenElement || document.location.pathname == '/watch'
+  // In the split watch view the video belongs to the player webview. The
+  // browsing one has the feed, whose previews play by themselves -- letting it
+  // arm the floating window is the other way a pinned window ends up showing
+  // something the user was not watching.
+  const isBrowsingView = (window as any).NouTubeRole === 'browse'
   const showable =
-    isPictureInPictureEnabled() && onVideoPage && video && !video.paused && !video.ended && video.videoWidth > 0
+    isPictureInPictureEnabled() &&
+    !isBrowsingView &&
+    onVideoPage &&
+    video &&
+    !video.paused &&
+    !video.ended &&
+    video.videoWidth > 0
   const size = showable ? [video.videoWidth, video.videoHeight] : [0, 0]
   const key = size.join('x')
   if (key == reported) {

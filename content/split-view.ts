@@ -1,4 +1,4 @@
-import { emit } from './utils'
+import { emit, settleViewportLayout } from './utils'
 import { isWatchUrl } from '../lib/split-watch-url'
 import { installSplitPlayerWindow } from './split-player-window'
 import { findSplitLink } from './split-link'
@@ -233,10 +233,9 @@ export function setNativeMini(enabled: boolean) {
     ;(document.head || root).appendChild(style)
   }
   root.classList.toggle(MINI_CLASS, Boolean(enabled))
-  // The player only recomputes its layout when it thinks the window moved.
-  try {
-    window.dispatchEvent(new Event('resize'))
-  } catch {}
+  // The app resizes the box on its own schedule; one resize now would have the
+  // player measure the box it is about to stop having.
+  settleViewportLayout()
 }
 
 /* The player owns the audio while it is loaded, so the browsing webview is
