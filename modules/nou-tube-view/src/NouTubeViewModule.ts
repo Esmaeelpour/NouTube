@@ -5,6 +5,8 @@ declare class NouTubeViewModule extends NativeModule {
   executeJavaScriptAsync(script: string): Promise<string>
   loadUrl(url: string): void
   goBack(): Promise<void>
+  /* Whether goBack would step back a page rather than leave the app. */
+  canGoBack(): Promise<boolean>
   /* Pin the video this view is playing to a floating window, answering false
    * when there is nothing to pin (see NouPictureInPicture.enterNow). */
   enterPictureInPicture(): Promise<boolean>

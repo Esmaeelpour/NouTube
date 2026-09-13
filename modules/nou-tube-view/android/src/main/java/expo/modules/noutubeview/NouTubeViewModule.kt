@@ -307,6 +307,13 @@ class NouTubeViewModule : Module() {
           return@Coroutine view.evalAwait(script)
         }
 
+      // Whether this webview has a page to go back to. goBack below falls back
+      // to finishing the activity, so the caller has to ask before it can tell
+      // "one step back" from "leaving the app".
+      AsyncFunction("canGoBack") { view: NouTubeView ->
+        view.webView.canGoBack()
+      }
+
       AsyncFunction("goBack") { view: NouTubeView ->
         val webView = view.webView
         if (webView.canGoBack()) {

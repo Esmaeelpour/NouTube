@@ -121,28 +121,40 @@ export default function HomeScreen() {
       sleepTimer$.clear()
     }
 
-    const goBack = () => {
-      // Back out of the split watch view first: it always returns to the
-      // browsing webview instead of stepping back through videos.
+    // Back keeps the video and moves the user: back to the page they came from
+    // with the video carrying on in the mini player, and only once there is no
+    // page left to go back to does the video take over -- pinned to a floating
+    // window as the app steps out of the way.
+    const back = async () => {
+      // The split watch view keeps the browsing page alive underneath, so this
+      // is both halves at once: the page returns and the video drops into the
+      // mini player rather than stopping.
       if (handleSplitBack()) {
         return
       }
-      ui$.webview.get()?.goBack()
+      const webview = ui$.webview.get()
+      // A shell without the query: its goBack already steps back where it can
+      // and leaves the app where it cannot, which is this order minus the pin.
+      if (typeof webview?.canGoBack !== 'function') {
+        void webview?.goBack?.()
+        return
+      }
+      if (await webview.canGoBack()) {
+        void webview.goBack()
+        return
+      }
+      // Nowhere left to go back to, so leaving is the only way out: hand the
+      // video to a floating window on the way.
+      if (await enterPictureInPicture()) {
+        return
+      }
+      // Nothing playing, or picture-in-picture turned off: goBack leaves the
+      // app when the webview has no history of its own.
+      void webview.goBack()
     }
 
     const backSubscription = BackHandler.addEventListener('hardwareBackPress', function () {
-      // With Picture-in-Picture armed, back means "keep watching in a floating
-      // window". Asking for it here rather than letting the activity pause into
-      // it on the way out is what keeps the transition on the video: navigating
-      // first is how the pinned window used to end up showing the page behind
-      // it. The answer only comes back once the system has refused (nothing
-      // playing, PiP off, or turned off for the app), so the normal back is not
-      // lost, only deferred to that point.
-      void enterPictureInPicture().then((entered) => {
-        if (!entered) {
-          goBack()
-        }
-      })
+      void back().catch((error) => console.error('back failed', error))
       return true
     })
 
