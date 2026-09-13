@@ -14,7 +14,6 @@ const activeClass = 'active'
 const revealClass = 'reveal'
 const hiddenClass = 'hidden'
 const revealMs = 3000
-const brightnessKey = 'nou:brightness'
 const sideKey = 'nou:fsControlsSide'
 const rightClass = 'right'
 
@@ -220,18 +219,11 @@ function lockScreen() {
   revealUnlockButton(overlay)
 }
 
-function getSavedBrightness() {
-  const saved = Number(localStorage.getItem(brightnessKey))
-  return Number.isFinite(saved) && saved > 0 && saved <= 100 ? saved : undefined
-}
-
-// Without a saved value the slider has to start where the screen actually is,
-// not at full, so fall back to what the window reports.
+/* The slider starts where the screen actually is. Nothing is remembered across
+ * fullscreens: dimming the player is a choice about the video being watched
+ * now, and a value kept from some earlier session would reach up and change
+ * the screen every time fullscreen opened, without anyone asking it to. */
 function getCurrentBrightness() {
-  const saved = getSavedBrightness()
-  if (saved !== undefined) {
-    return saved
-  }
   const native = window.NouTubeI?.getBrightness?.(bridgeToken())
   return typeof native == 'number' && native > 0 ? Math.round(linearToGamma(native) * 100) : 100
 }
@@ -260,13 +252,6 @@ export const isFullscreen = () => Boolean(getFullscreenElement())
 function applyBrightness(percent: number) {
   // The native side takes 0..1, with -1 meaning "hand control back to Android".
   window.NouTubeI?.setBrightness?.(bridgeToken(), percent >= 100 ? -1 : gammaToLinear(percent / 100))
-}
-
-function applySavedBrightness() {
-  const saved = getSavedBrightness()
-  if (saved !== undefined) {
-    applyBrightness(saved)
-  }
 }
 
 export function resetBrightness() {
@@ -538,7 +523,6 @@ function renderPanelContent(panel: HTMLElement) {
   const brightnessInput = panel.querySelector<HTMLInputElement>('#_nou_fs_brightness')
   brightnessInput?.addEventListener('input', () => {
     const percent = Number(brightnessInput.value)
-    localStorage.setItem(brightnessKey, String(percent))
     applyBrightness(percent)
     paintSlider(brightnessInput)
   })
@@ -626,6 +610,13 @@ function renderControlsButton() {
 }
 
 export function installFullscreenControls() {
+  // Installs that used the old slider (or the brightness gesture before it was
+  // dropped) still carry a value that fullscreen used to re-apply. Nothing
+  // reads it any more; clear it so it stops being carried around.
+  try {
+    localStorage.removeItem('nou:brightness')
+  } catch {}
+
   // YouTube rebuilds the control overlay during the fullscreen transition and
   // on video changes, so re-add the button whenever the player subtree changes.
   // The class attribute is watched too, for the desktop autohide flag.
@@ -638,7 +629,6 @@ export function installFullscreenControls() {
     const host = getFullscreenElement()
     if (host) {
       renderControlsButton()
-      applySavedBrightness()
       // Only the web player needs the autohide class; on Android the CSS handles it,
       // and passing attributeFilter alongside attributes:false is a TypeError.
       observer.observe(host, {
