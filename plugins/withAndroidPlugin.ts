@@ -193,6 +193,14 @@ const withAndroidSigningConfig: ConfigPlugin = (config) => {
       .replace(
         'android {',
         `ext.abiCodes = [x86:1, x86_64:2, 'armeabi-v7a':3, 'arm64-v8a': 4]
+// Which of those to actually build. -PreactNativeArchitectures narrows it --
+// the release only ships arm64-v8a -- while the version code each APK gets
+// stays keyed to the map above, so a narrowed build numbers its output exactly
+// as a full one would. Without this the split list ignored the property and
+// built an APK per architecture whether or not its libraries had been made.
+ext.builtAbis = (project.hasProperty('reactNativeArchitectures')
+    ? project.property('reactNativeArchitectures').split(',').collect { it.trim() }
+    : project.ext.abiCodes.keySet().toList()) as String[]
 
 android {
     flavorDimensions "distribution"
@@ -224,7 +232,7 @@ android {
             reset()
             enable true
             universalApk false
-            include project.ext.abiCodes.keySet() as String[]
+            include project.ext.builtAbis
         }
     }
     android.applicationVariants.configureEach { variant ->
