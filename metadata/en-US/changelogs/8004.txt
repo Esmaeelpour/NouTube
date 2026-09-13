@@ -1,0 +1,5 @@
+- Back leaves the video in the mini player instead of the app
+- Fix the mini player leaving the video squashed on the way back up
+- Picture-in-picture pins the video you are watching, not another one
+- Keep playing when the screen goes off
+- Rework downloads: a queue, cancel, retry and a list that is kept
