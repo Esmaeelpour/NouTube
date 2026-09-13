@@ -1,0 +1,2 @@
+- Open shared and linked videos in the player, not alongside it
+- Fix the swipe down on the player not reaching the mini player
