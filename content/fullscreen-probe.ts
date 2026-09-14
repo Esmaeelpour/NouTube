@@ -71,8 +71,10 @@ function logSheets(fullscreenElement: Element | null) {
     if (rect.width < 40 || rect.height < 40) {
       continue
     }
+    // Hidden ones included on purpose: a menu that opened where nothing is
+    // painted is exactly the thing being looked for.
     const style = getComputedStyle(element)
-    if (style.display === 'none' || style.visibility === 'hidden') {
+    if (style.display === 'none') {
       continue
     }
     log(
@@ -81,7 +83,53 @@ function logSheets(fullscreenElement: Element | null) {
   }
 }
 
+/* Whether the button is activated at all. If a click reaches it and still
+ * nothing opens, the tap is not the problem and the menu is. */
+function watchClicks() {
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (!isFullscreen()) {
+        return
+      }
+      const target = event.target
+      log(`[nou-probe] click on ${describe(target instanceof Element ? target : null)}`)
+    },
+    true,
+  )
+}
+
+/* Everything the page adds after a tap, painted or not. A menu that opens
+ * inside a hidden host shows up here and nowhere else. */
+function watchAdditions() {
+  let until = 0
+  const observer = new MutationObserver((records) => {
+    if (Date.now() > until) {
+      return
+    }
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) {
+          continue
+        }
+        const rect = node.getBoundingClientRect()
+        if (rect.width < 40 || rect.height < 40) {
+          continue
+        }
+        const host = document.fullscreenElement
+        log(`[nou-probe] added inFs=${host ? host.contains(node) : 'n/a'} ${describe(node)}`)
+      }
+    }
+  })
+  observer.observe(document.documentElement, { childList: true, subtree: true })
+  return () => {
+    until = Date.now() + 1500
+  }
+}
+
 export function installFullscreenProbe() {
+  watchClicks()
+  const watchFor = watchAdditions()
   document.addEventListener(
     'touchstart',
     (event) => {
@@ -96,6 +144,7 @@ export function installFullscreenProbe() {
           document.elementsFromPoint(x, y).slice(0, 5).map(describe).join(' >> '),
       )
       logGear()
+      watchFor()
       setTimeout(() => logSheets(document.fullscreenElement), 600)
     },
     { capture: true, passive: true },
