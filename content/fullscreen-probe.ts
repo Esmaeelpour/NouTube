@@ -127,6 +127,33 @@ function watchAdditions() {
   }
 }
 
+/* Every element whose box covers a point, hidden ones included.
+ * elementsFromPoint only returns what can be hit, which is exactly what is
+ * missing here: the gear is painted and not hittable, so the thing to find is
+ * the element that paints it and the hidden one that should have taken the
+ * tap. */
+function logStackAt(x: number, y: number) {
+  for (const element of document.querySelectorAll('*')) {
+    const rect = element.getBoundingClientRect()
+    if (rect.width > 400 || rect.height > 400 || rect.width < 1) {
+      continue
+    }
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      continue
+    }
+    log(`[nou-probe] over ${describe(element)}`)
+  }
+  const host = document.querySelector('player-fullscreen-top-controls')
+  log(`[nou-probe] top-controls host ${describe(host)}`)
+  for (const element of host ? host.querySelectorAll('*') : []) {
+    const rect = element.getBoundingClientRect()
+    if (rect.width < 1) {
+      continue
+    }
+    log(`[nou-probe] host-child ${describe(element)}`)
+  }
+}
+
 export function installFullscreenProbe() {
   watchClicks()
   const watchFor = watchAdditions()
@@ -144,6 +171,7 @@ export function installFullscreenProbe() {
           document.elementsFromPoint(x, y).slice(0, 5).map(describe).join(' >> '),
       )
       logGear()
+      logStackAt(875, 24)
       watchFor()
       setTimeout(() => logSheets(document.fullscreenElement), 600)
     },
